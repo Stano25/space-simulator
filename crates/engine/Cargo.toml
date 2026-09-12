@@ -5,3 +5,4 @@ edition = "2024"
 
 [dependencies]
 winit = { workspace = true }
+bevy_ecs = { workspace = true }

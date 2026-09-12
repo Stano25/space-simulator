@@ -6,3 +6,4 @@ members = [
 ]
 
 [workspace.dependencies]
+winit = "0.30.13"

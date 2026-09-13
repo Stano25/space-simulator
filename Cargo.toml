@@ -8,3 +8,5 @@ members = [
 [workspace.dependencies]
 winit = "0.30.13"
 bevy_ecs = "0.19.1"
+wgpu = "30.0.1"
+pollster = "1.0.1"

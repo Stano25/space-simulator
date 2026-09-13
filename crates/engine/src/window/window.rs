@@ -1,5 +1,5 @@
 use winit::dpi::LogicalSize;
-use winit::window::{Window, WindowAttributes};
+use winit::window::WindowAttributes;
 
 #[derive(Clone, Debug)]
 pub struct WindowConfig {

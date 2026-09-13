@@ -6,6 +6,7 @@ use bevy_ecs::system::ScheduleSystem;
 use crate::window::window::WindowConfig;
 use crate::app::runner::AppRunner;
 use crate::input::input::InputState;
+use crate::render::systems::render_system;
 
 #[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct StartupSchedule;
@@ -26,15 +27,17 @@ pub struct App {
 
 impl App {
     pub fn new() -> Self {
-        let mut world = World::new();
+        let mut render_schedule = Schedule::new(RenderSchedule);
+        render_schedule.add_systems(render_system);
 
+        let mut world = World::new();
         world.insert_resource(InputState::default());
         
         Self {
             world,
             startup_schedule: Schedule::new(StartupSchedule),
             update_schedule: Schedule::new(UpdateSchedule),
-            render_schedule: Schedule::new(RenderSchedule),
+            render_schedule: render_schedule,
             window_config: WindowConfig::default(),
         }
     }

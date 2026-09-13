@@ -7,7 +7,8 @@ use winit::keyboard::PhysicalKey;
 use winit::window::{Window, WindowId};
 
 use crate::app::app::App;
-use crate::input::input::InputState;   
+use crate::input::input::InputState;
+use crate::render::context::RenderContext;   
 
 pub struct AppRunner {
     app: App,
@@ -35,6 +36,9 @@ impl ApplicationHandler for AppRunner {
         let window = Arc::new(raw_window);
         self.window = Some(window.clone());
 
+        let render_context = pollster::block_on(RenderContext::new(window.clone()));
+        
+        self.app.world.insert_resource(render_context);
         self.app.startup_schedule.run(&mut self.app.world);
     }
 
@@ -44,6 +48,7 @@ impl ApplicationHandler for AppRunner {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
+                self.app.render_schedule.run(&mut self.app.world);
             }
             WindowEvent::KeyboardInput { event, ..} => {
                 if let PhysicalKey::Code(key_code) = event.physical_key {
@@ -59,6 +64,11 @@ impl ApplicationHandler for AppRunner {
                             input.keyboard.just_released_keys.insert(key_code);
                         }
                     }
+                }
+            }
+            WindowEvent::Resized(new_size) => {
+                if let Some(mut render_context) = self.app.world.get_resource_mut::<RenderContext>() {
+                    render_context.resize(new_size.width, new_size.height);
                 }
             }
             _ => (),

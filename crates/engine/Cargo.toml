@@ -6,3 +6,5 @@ edition = "2024"
 [dependencies]
 winit = { workspace = true }
 bevy_ecs = { workspace = true }
+wgpu = { workspace = true }
+pollster = { workspace = true }

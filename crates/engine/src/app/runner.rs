@@ -8,7 +8,8 @@ use winit::window::{Window, WindowId};
 
 use crate::app::app::App;
 use crate::input::input::InputState;
-use crate::render::context::RenderContext;   
+use crate::render::context::RenderContext;
+use crate::render::pipeline::{PipelineBuilder, PipelineRegistry};
 
 pub struct AppRunner {
     app: App,
@@ -37,6 +38,15 @@ impl ApplicationHandler for AppRunner {
         self.window = Some(window.clone());
 
         let render_context = pollster::block_on(RenderContext::new(window.clone()));
+
+        let default_pipeline = PipelineBuilder::new(include_str!("../../../../assets/shaders/shader.wgsl"))
+            .with_pixel_format(render_context.config.format)
+            .build(&render_context.device);
+
+        {
+            let mut pipeline_registry = self.app.world.resource_mut::<PipelineRegistry>();
+            pipeline_registry.pipelines.insert("default".into(), default_pipeline);
+        }
         
         self.app.world.insert_resource(render_context);
         self.app.startup_schedule.run(&mut self.app.world);

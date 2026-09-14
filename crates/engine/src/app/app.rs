@@ -7,6 +7,7 @@ use crate::window::window::WindowConfig;
 use crate::app::runner::AppRunner;
 use crate::input::input::InputState;
 use crate::render::systems::render_system;
+use crate::render::pipeline::PipelineRegistry;
 
 #[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct StartupSchedule;
@@ -32,6 +33,7 @@ impl App {
 
         let mut world = World::new();
         world.insert_resource(InputState::default());
+        world.insert_resource(PipelineRegistry::default());
         
         Self {
             world,

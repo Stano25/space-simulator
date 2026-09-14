@@ -1,17 +1,16 @@
 use bevy_ecs::prelude::*;
 
-use crate::render::{context::RenderContext};
+use crate::render::{context::RenderContext, pipeline::PipelineRegistry};
 
-pub fn render_system(mut render_context: ResMut<RenderContext>) {
+pub fn render_system(mut render_context: ResMut<RenderContext>, pipeline_registry: Res<PipelineRegistry>) {
     let current_surface_texture = render_context.surface.get_current_texture();
     let drawable = match current_surface_texture {
         wgpu::CurrentSurfaceTexture::Success(frame) | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
         wgpu::CurrentSurfaceTexture::Timeout => {
             return;
         }
-        wgpu::CurrentSurfaceTexture::Outdated | wgpu::CurrentSurfaceTexture::Lost => {
-            let (width, height) = render_context.size;
-            render_context.resize(width, height);
+        wgpu::CurrentSurfaceTexture::Outdated => {
+            render_context.update_surface();
             return;
         }
         _ => return,
@@ -44,7 +43,12 @@ pub fn render_system(mut render_context: ResMut<RenderContext>) {
         timestamp_writes: None,
     };
 
-    command_encoder.begin_render_pass(&render_pass_descriptor);
+    if let Some(default_pipeline) = pipeline_registry.pipelines.get("default") {
+        let mut render_pass = command_encoder.begin_render_pass(&render_pass_descriptor);
+        render_pass.set_pipeline(&default_pipeline);
+        render_pass.draw(0..3, 0..1);
+    }
+    
     render_context.queue.submit(std::iter::once(command_encoder.finish()));
     
     render_context.queue.present(drawable);

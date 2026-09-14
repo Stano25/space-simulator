@@ -9,8 +9,8 @@ pub struct RenderContext {
     pub surface: wgpu::Surface<'static>,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
-    config: wgpu::SurfaceConfiguration,
-    pub size: (u32, u32),
+    pub config: wgpu::SurfaceConfiguration,
+    size: (u32, u32),
     window: Arc<Window>,
 }
 
@@ -78,12 +78,11 @@ impl RenderContext {
             self.size = (new_width, new_height);
             self.config.width = new_width;
             self.config.height = new_height;
-            self.surface.configure(&self.device, &self.config);
+            self.update_surface();
         }
     }
 
     pub fn update_surface(&mut self) {
-        self.surface = self.instance.create_surface(self.window.clone()).unwrap();
         self.surface.configure(&self.device, &self.config);
     }
 }

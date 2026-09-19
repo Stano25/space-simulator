@@ -2,6 +2,8 @@ use std::collections::HashMap;
 
 use bevy_ecs::prelude::Resource;
 
+use crate::render::mesh::Vertex;
+
 #[derive(Resource, Default)]
 pub struct PipelineRegistry{
     pub pipelines: HashMap<String, wgpu::RenderPipeline>
@@ -64,7 +66,7 @@ impl PipelineBuilder {
                 module: &shader_module, 
                 entry_point: Some(self.vertex_entry.as_str()), 
                 compilation_options: wgpu::PipelineCompilationOptions::default(), 
-                buffers: &[] 
+                buffers: &[Some(Vertex::desc())] 
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader_module,

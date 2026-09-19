@@ -8,3 +8,4 @@ winit = { workspace = true }
 bevy_ecs = { workspace = true }
 wgpu = { workspace = true }
 pollster = { workspace = true }
+bytemuck = { workspace = true }

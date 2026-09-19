@@ -1,8 +1,8 @@
-use bevy_ecs::prelude::*;
+use bevy_ecs::{prelude::*, query};
 
-use crate::render::{context::RenderContext, pipeline::PipelineRegistry};
+use crate::render::{context::RenderContext, pipeline::PipelineRegistry, mesh::Mesh};
 
-pub fn render_system(mut render_context: ResMut<RenderContext>, pipeline_registry: Res<PipelineRegistry>) {
+pub fn render_system(mut render_context: ResMut<RenderContext>, pipeline_registry: Res<PipelineRegistry>, query: Query<&Mesh>) {
     let current_surface_texture = render_context.surface.get_current_texture();
     let drawable = match current_surface_texture {
         wgpu::CurrentSurfaceTexture::Success(frame) | wgpu::CurrentSurfaceTexture::Suboptimal(frame) => frame,
@@ -45,8 +45,13 @@ pub fn render_system(mut render_context: ResMut<RenderContext>, pipeline_registr
 
     if let Some(default_pipeline) = pipeline_registry.pipelines.get("default") {
         let mut render_pass = command_encoder.begin_render_pass(&render_pass_descriptor);
-        render_pass.set_pipeline(&default_pipeline);
-        render_pass.draw(0..3, 0..1);
+        render_pass.set_pipeline(default_pipeline);
+
+        for mesh in query.iter() {
+            render_pass.set_vertex_buffer(0, mesh.gpu_mesh.vertex_buffer.slice(..));
+            render_pass.set_index_buffer(mesh.gpu_mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.draw_indexed(0..mesh.gpu_mesh.index_count, 0, 0..1);
+        }
     }
     
     render_context.queue.submit(std::iter::once(command_encoder.finish()));

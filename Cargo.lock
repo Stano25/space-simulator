@@ -644,6 +644,7 @@ name = "engine"
 version = "0.1.0"
 dependencies = [
  "bevy_ecs",
+ "bytemuck",
  "pollster",
  "wgpu",
  "winit",
@@ -1823,6 +1824,7 @@ dependencies = [
 name = "sandbox"
 version = "0.1.0"
 dependencies = [
+ "bevy_ecs",
  "engine",
 ]
 

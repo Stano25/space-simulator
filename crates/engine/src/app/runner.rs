@@ -10,6 +10,7 @@ use crate::app::app::App;
 use crate::input::input::InputState;
 use crate::render::context::RenderContext;
 use crate::render::pipeline::{PipelineBuilder, PipelineRegistry};
+use crate::render::layout::GpuLayout;
 
 pub struct AppRunner {
     app: App,
@@ -39,8 +40,11 @@ impl ApplicationHandler for AppRunner {
 
         let render_context = pollster::block_on(RenderContext::new(window.clone()));
 
+        let gpu_layout = GpuLayout::new(&render_context.device);
+
         let default_pipeline = PipelineBuilder::new(include_str!("../../../../assets/shaders/shader.wgsl"))
             .with_pixel_format(render_context.config.format)
+            .with_layout(&gpu_layout.material)
             .build(&render_context.device);
 
         {
@@ -48,11 +52,12 @@ impl ApplicationHandler for AppRunner {
             pipeline_registry.pipelines.insert("default".into(), default_pipeline);
         }
         
+        self.app.world.insert_resource(gpu_layout);
         self.app.world.insert_resource(render_context);
         self.app.startup_schedule.run(&mut self.app.world);
     }
 
-    fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         match event {
             WindowEvent::CloseRequested => {
                 event_loop.exit();

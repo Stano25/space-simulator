@@ -59,7 +59,7 @@ impl App {
         self
     }
 
-    pub fn run(mut self) {
+    pub fn run(self) {
         // Create the event loop
         let event_loop = EventLoop::new().expect("Failed to create EventLoop");
         event_loop.set_control_flow(ControlFlow::Poll);

@@ -9,19 +9,21 @@ pub struct PipelineRegistry{
     pub pipelines: HashMap<String, wgpu::RenderPipeline>
 }
 
-pub struct PipelineBuilder {
+pub struct PipelineBuilder<'a> {
     shader_path: String,
     vertex_entry: String,
     fragment_entry: String,
+    layouts: Vec<Option<&'a wgpu::BindGroupLayout>>,
     pixel_format: wgpu::TextureFormat
 }
 
-impl PipelineBuilder {
+impl<'a> PipelineBuilder<'a> {
     pub fn new(shader_path: impl Into<String>) -> Self {
         Self { 
             shader_path: shader_path.into(),
             vertex_entry: String::from("vs_main"),
             fragment_entry: String::from("fs_main"),
+            layouts: Vec::new(),
             pixel_format: wgpu::TextureFormat::Rgba8UnormSrgb
         }
     }
@@ -41,6 +43,16 @@ impl PipelineBuilder {
         self
     }
 
+    pub fn with_layout(mut self, layout: &'a wgpu::BindGroupLayout) -> Self {
+        self.layouts.push(Some(layout));
+        self
+    }
+
+    pub fn with_layouts(mut self, layouts: &[&'a wgpu::BindGroupLayout]) -> Self {
+        self.layouts = layouts.iter().map(|layout| Some(*layout)).collect();
+        self
+    }
+
     pub fn build(self, device: &wgpu::Device) -> wgpu::RenderPipeline {
         let shader_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
@@ -49,7 +61,7 @@ impl PipelineBuilder {
 
         let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { 
             label: Some("Render Pipeline Layout"),
-            bind_group_layouts: &[], 
+            bind_group_layouts: &self.layouts, 
             immediate_size: 0 
         });
 

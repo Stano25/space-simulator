@@ -1,15 +1,21 @@
+use std::sync::Arc;
+
 use engine::app::app::App;
+use engine::render::texture;
 use engine::window::window::WindowConfig;
 use engine::render::{context::RenderContext, mesh::{Mesh, Vertex}};
+use engine::render::material::Material;
+use engine::render::layout::GpuLayout;
+use engine::render::texture::Texture;
 
 use bevy_ecs::prelude::*;
 
 const VERTICES: &[Vertex] = &[
-    Vertex { position: [-0.0868241, 0.49240386, 0.0], color: [0.5, 0.0, 0.5] }, // A
-    Vertex { position: [-0.49513406, 0.06958647, 0.0], color: [0.5, 0.0, 0.5] }, // B
-    Vertex { position: [-0.21918549, -0.44939706, 0.0], color: [0.5, 0.0, 0.5] }, // C
-    Vertex { position: [0.35966998, -0.3473291, 0.0], color: [0.5, 0.0, 0.5] }, // D
-    Vertex { position: [0.44147372, 0.2347359, 0.0], color: [0.5, 0.0, 0.5] }, // E
+    Vertex { position: [-0.0868241, 0.49240386, 0.0], uv: [0.4131759, 0.00759614], }, // A
+    Vertex { position: [-0.49513406, 0.06958647, 0.0], uv: [0.0048659444, 0.43041354], }, // B
+    Vertex { position: [-0.21918549, -0.44939706, 0.0], uv: [0.28081453, 0.949397], }, // C
+    Vertex { position: [0.35966998, -0.3473291, 0.0], uv: [0.85967, 0.84732914], }, // D
+    Vertex { position: [0.44147372, 0.2347359, 0.0], uv: [0.9414737, 0.2652641], }, // E
 ];
 
 const INDICES: &[u16] = &[
@@ -29,8 +35,12 @@ fn main() {
         .run();
 }
 
-fn test_mesh(mut commands: Commands, render_context: Res<RenderContext>) {
+fn test_mesh(mut commands: Commands, render_context: Res<RenderContext>, gpu_layout: Res<GpuLayout>) {
     let mesh = Mesh::new(&render_context.device, VERTICES, INDICES);
 
-    commands.spawn(mesh);
+    let texture = Texture::from_bytes(&render_context.device, &render_context.queue, include_bytes!("../../../assets/textures/happy-tree.png"), "happy-tree.png").unwrap();
+
+    let material = Material::new(&render_context.device, &gpu_layout.material, Arc::new(texture));
+
+    commands.spawn((mesh, material));
 }

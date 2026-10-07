@@ -7,6 +7,7 @@ use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::ScheduleLabel;
 use bevy_ecs::system::ScheduleSystem;
 
+use crate::render::pipeline::EnginePipeline;
 use crate::time::time::Time;
 use crate::window::window::WindowConfig;
 use crate::app::runner::AppRunner;
@@ -14,7 +15,7 @@ use crate::input::input::InputState;
 use crate::render::{systems::render_system,
                     context::RenderContext,
                     pipeline::{PipelineBuilder, PipelineRegistry},
-                    layout::{GpuLayout, EngineLayout},
+                    layout::{LayoutRegistry, EngineLayout},
                     camera::{GpuCamera, Projection}};
 
 
@@ -78,7 +79,7 @@ impl App {
 
         let render_context = pollster::block_on(RenderContext::new(window.clone()));
 
-        let gpu_layout = GpuLayout::new(&render_context.device);
+        let gpu_layout = LayoutRegistry::new(&render_context.device);
 
         let gpu_camera = GpuCamera::new(&render_context.device, &gpu_layout.get(EngineLayout::Camera));
 
@@ -91,7 +92,7 @@ impl App {
 
         {
             let mut pipeline_registry = self.world.resource_mut::<PipelineRegistry>();
-            pipeline_registry.pipelines.insert("default".into(), default_pipeline);
+            pipeline_registry.insert(EnginePipeline::Default, default_pipeline);
         }
 
         self.world.insert_resource(projection);

@@ -6,7 +6,7 @@ use engine::render::camera::{self, Camera};
 use engine::window::window::WindowConfig;
 use engine::render::{context::RenderContext, mesh::{Mesh, Vertex}};
 use engine::render::material::Material;
-use engine::render::layout::{EngineLayout, GpuLayout};
+use engine::render::layout::{EngineLayout, LayoutRegistry};
 use engine::render::texture::{self, Texture};
 use engine::render::camera::{GpuCamera, CameraUniform, Projection, SAFE_FRAC_PI_2};
 use engine::input::input::InputState;
@@ -53,7 +53,7 @@ fn main() {
         .run();
 }
 
-fn test(mut commands: Commands, render_context: Res<RenderContext>, gpu_layout: Res<GpuLayout>) {
+fn test(mut commands: Commands, render_context: Res<RenderContext>, gpu_layout: Res<LayoutRegistry>) {
     let camera =  Camera::from_direction(
         glam::Vec3::new(0.0, 0.0, 2.0),
         glam::Vec3::new(0.0, 0.0, -1.0)

@@ -1,10 +1,6 @@
 use bevy_ecs::prelude::*;
 
-use crate::render::{context::RenderContext, 
-                    pipeline::PipelineRegistry, 
-                    mesh::Mesh, 
-                    material::Material, 
-                    camera::GpuCamera};
+use crate::render::{camera::GpuCamera, context::RenderContext, layout::EngineLayout, material::Material, mesh::Mesh, pipeline::{EnginePipeline, PipelineRegistry}};
 
 pub fn render_system(mut render_context: ResMut<RenderContext>, pipeline_registry: Res<PipelineRegistry>, query: Query<(&Mesh, &Material)>, camera: Res<GpuCamera>) {
     let current_surface_texture = render_context.surface.get_current_texture();
@@ -22,7 +18,7 @@ pub fn render_system(mut render_context: ResMut<RenderContext>, pipeline_registr
 
     let image_view_descriptor = wgpu::TextureViewDescriptor::default();
     let image_view = drawable.texture.create_view(&image_view_descriptor);
-    
+
     let command_encoder_descriptor = wgpu::CommandEncoderDescriptor {
         label: Some("Render Encoder"),
     };
@@ -47,21 +43,21 @@ pub fn render_system(mut render_context: ResMut<RenderContext>, pipeline_registr
         timestamp_writes: None,
     };
 
-    if let Some(default_pipeline) = pipeline_registry.pipelines.get("default") {
+    if let Some(default_pipeline) = pipeline_registry.try_get(EnginePipeline::Default) {
         let mut render_pass = command_encoder.begin_render_pass(&render_pass_descriptor);
         render_pass.set_pipeline(default_pipeline);
 
         for (mesh, material) in query.iter() {
             render_pass.set_bind_group(0, &material.gpu_material.bind_group, &[]);
             render_pass.set_bind_group(1, &camera.bind_group, &[]);
-                
+
             render_pass.set_vertex_buffer(0, mesh.gpu_mesh.vertex_buffer.slice(..));
             render_pass.set_index_buffer(mesh.gpu_mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             render_pass.draw_indexed(0..mesh.gpu_mesh.index_count, 0, 0..1);
         }
     }
-    
+
     render_context.queue.submit(std::iter::once(command_encoder.finish()));
-    
+
     render_context.queue.present(drawable);
 }

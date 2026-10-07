@@ -8,15 +8,15 @@ pub struct LayoutId {
     index: usize,
 }
 
-pub trait IntoLayoutKey: Copy + 'static {
-    fn into_key(self) -> LayoutId;
-}
-
 #[repr(usize)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum EngineLayout {
     Material,
     Camera,
+}
+
+pub trait IntoLayoutKey: Copy + 'static {
+    fn into_key(self) -> LayoutId;
 }
 
 impl IntoLayoutKey for EngineLayout {
@@ -29,11 +29,11 @@ impl IntoLayoutKey for EngineLayout {
 }
 
 #[derive(Resource)]
-pub struct GpuLayout {
+pub struct LayoutRegistry {
     pub gpu_layouts: HashMap<LayoutId, wgpu::BindGroupLayout>,
 }
 
-impl GpuLayout {
+impl LayoutRegistry {
     pub fn new(device: &wgpu::Device) -> Self {
         let material_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             entries: &[
@@ -76,7 +76,7 @@ impl GpuLayout {
         let mut gpu_layouts: HashMap<LayoutId, wgpu::BindGroupLayout> = HashMap::new();
         gpu_layouts.insert(EngineLayout::Material.into_key(), material_layout);
         gpu_layouts.insert(EngineLayout::Camera.into_key(), camera_layout);
-        GpuLayout {
+        LayoutRegistry {
             gpu_layouts
         }
     }

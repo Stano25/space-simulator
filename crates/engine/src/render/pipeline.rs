@@ -1,12 +1,56 @@
 use std::collections::HashMap;
+use std::any::TypeId;
 
 use bevy_ecs::prelude::Resource;
 
 use crate::render::mesh::Vertex;
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct PipelineId {
+    type_id: TypeId,
+    index: usize,
+}
+
+#[repr(usize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum EnginePipeline {
+    Default,
+}
+
+pub trait IntoPipelineKey: Copy + 'static {
+    fn into_key(self) -> PipelineId;
+}
+
+impl IntoPipelineKey for EnginePipeline {
+    fn into_key(self) -> PipelineId {
+        PipelineId {
+            type_id: TypeId::of::<Self>(),
+            index: self as usize,
+        }
+    }
+}
+
 #[derive(Resource, Default)]
-pub struct PipelineRegistry{
-    pub pipelines: HashMap<String, wgpu::RenderPipeline>
+pub struct PipelineRegistry {
+    pub pipelines: HashMap<PipelineId, wgpu::RenderPipeline>
+}
+
+impl PipelineRegistry {
+    pub fn insert(&mut self, key: impl IntoPipelineKey, pipeline: wgpu::RenderPipeline) -> &mut Self {
+        self.pipelines.insert(key.into_key(), pipeline);
+        self
+    }
+    // Direct access
+    pub fn get(&self, key: impl IntoPipelineKey) -> &wgpu::RenderPipeline {
+            let key_id = key.into_key();
+            self.pipelines
+                .get(&key_id)
+                .unwrap_or_else(|| panic!("BindGroupLayout not found for key: {:?}", key_id))
+        }
+    // Safe access
+    pub fn try_get(&self, key: impl IntoPipelineKey) -> Option<&wgpu::RenderPipeline> {
+        self.pipelines.get(&key.into_key())
+    }
 }
 
 pub struct PipelineBuilder<'a> {
@@ -19,7 +63,7 @@ pub struct PipelineBuilder<'a> {
 
 impl<'a> PipelineBuilder<'a> {
     pub fn new(shader_path: impl Into<String>) -> Self {
-        Self { 
+        Self {
             shader_path: shader_path.into(),
             vertex_entry: String::from("vs_main"),
             fragment_entry: String::from("fs_main"),
@@ -59,10 +103,10 @@ impl<'a> PipelineBuilder<'a> {
             source: wgpu::ShaderSource::Wgsl(self.shader_path.into())
         });
 
-        let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { 
+        let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
-            bind_group_layouts: &self.layouts, 
-            immediate_size: 0 
+            bind_group_layouts: &self.layouts,
+            immediate_size: 0
         });
 
         let render_targets = wgpu::ColorTargetState {
@@ -71,38 +115,38 @@ impl<'a> PipelineBuilder<'a> {
             write_mask: wgpu::ColorWrites::ALL,
         };
 
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor { 
-            label: Some("Render Pipeline"), 
+        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Render Pipeline"),
             layout: Some(&render_pipeline_layout),
-            vertex: wgpu::VertexState { 
-                module: &shader_module, 
-                entry_point: Some(self.vertex_entry.as_str()), 
-                compilation_options: wgpu::PipelineCompilationOptions::default(), 
-                buffers: &[Some(Vertex::desc())] 
+            vertex: wgpu::VertexState {
+                module: &shader_module,
+                entry_point: Some(self.vertex_entry.as_str()),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                buffers: &[Some(Vertex::desc())]
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader_module,
                 entry_point: Some(self.fragment_entry.as_str()),
                 targets: &[Some(render_targets)],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }), 
-            primitive: wgpu::PrimitiveState { 
-                topology: wgpu::PrimitiveTopology::TriangleList, 
-                strip_index_format: None, 
-                front_face: wgpu::FrontFace::Ccw, 
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
                 cull_mode: Some(wgpu::Face::Back),
                 polygon_mode: wgpu::PolygonMode::Fill,
-                unclipped_depth: false,  
-                conservative: false 
-            }, 
-            depth_stencil: None, 
-            multisample: wgpu::MultisampleState { 
-                count: 1, 
-                mask: !0, 
+                unclipped_depth: false,
+                conservative: false
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
                 alpha_to_coverage_enabled: false
-            }, 
-            multiview_mask: None, 
-            cache: None 
+            },
+            multiview_mask: None,
+            cache: None
         });
 
         render_pipeline

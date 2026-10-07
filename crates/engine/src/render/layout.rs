@@ -1,9 +1,36 @@
 use bevy_ecs::prelude::*;
+use std::any::TypeId;
+use std::collections::HashMap;
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub struct LayoutId {
+    type_id: TypeId,
+    index: usize,
+}
+
+pub trait IntoLayoutKey: Copy + 'static {
+    fn into_key(self) -> LayoutId;
+}
+
+#[repr(usize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum EngineLayout {
+    Material,
+    Camera,
+}
+
+impl IntoLayoutKey for EngineLayout {
+    fn into_key(self) -> LayoutId {
+        LayoutId {
+            type_id: TypeId::of::<Self>(),
+            index: self as usize,
+        }
+    }
+}
 
 #[derive(Resource)]
 pub struct GpuLayout {
-    pub material: wgpu::BindGroupLayout,
-    pub camera: wgpu::BindGroupLayout,
+    pub gpu_layouts: HashMap<LayoutId, wgpu::BindGroupLayout>,
 }
 
 impl GpuLayout {
@@ -13,10 +40,10 @@ impl GpuLayout {
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture { 
+                    ty: wgpu::BindingType::Texture {
                         sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2, 
-                        multisampled: false 
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false
                     },
                     count: None,
                 },
@@ -35,10 +62,10 @@ impl GpuLayout {
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::VERTEX,
-                    ty: wgpu::BindingType::Buffer { 
-                        ty: wgpu::BufferBindingType::Uniform, 
-                        has_dynamic_offset: false, 
-                        min_binding_size: None 
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None
                     },
                     count: None,
                 },
@@ -46,9 +73,22 @@ impl GpuLayout {
             label: Some("Camera Bind Group Layout"),
         });
 
+        let mut gpu_layouts: HashMap<LayoutId, wgpu::BindGroupLayout> = HashMap::new();
+        gpu_layouts.insert(EngineLayout::Material.into_key(), material_layout);
+        gpu_layouts.insert(EngineLayout::Camera.into_key(), camera_layout);
         GpuLayout {
-            material: material_layout,
-            camera: camera_layout,
+            gpu_layouts
         }
+    }
+    // Direct access
+    pub fn get(&self, key: impl IntoLayoutKey) -> &wgpu::BindGroupLayout {
+            let key_id = key.into_key();
+            self.gpu_layouts
+                .get(&key_id)
+                .unwrap_or_else(|| panic!("BindGroupLayout not found for key: {:?}", key_id))
+        }
+    // Safe access
+    pub fn try_get(&self, key: impl IntoLayoutKey) -> Option<&wgpu::BindGroupLayout> {
+        self.gpu_layouts.get(&key.into_key())
     }
 }

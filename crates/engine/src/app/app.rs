@@ -14,7 +14,7 @@ use crate::input::input::InputState;
 use crate::render::{systems::render_system,
                     context::RenderContext,
                     pipeline::{PipelineBuilder, PipelineRegistry},
-                    layout::GpuLayout,
+                    layout::{GpuLayout, EngineLayout},
                     camera::{GpuCamera, Projection}};
 
 
@@ -80,13 +80,13 @@ impl App {
 
         let gpu_layout = GpuLayout::new(&render_context.device);
 
-        let gpu_camera = GpuCamera::new(&render_context.device, &gpu_layout.camera);
+        let gpu_camera = GpuCamera::new(&render_context.device, &gpu_layout.get(EngineLayout::Camera));
 
         let projection = Projection::new(render_context.size.0 as f32 / render_context.size.1 as f32, 45.0_f32.to_radians(), 0.1, 100.0);
 
         let default_pipeline = PipelineBuilder::new(include_str!("../../../../assets/shaders/shader.wgsl"))
             .with_pixel_format(render_context.config.format)
-            .with_layouts(&[&gpu_layout.material, &gpu_layout.camera])
+            .with_layouts(&[&gpu_layout.get(EngineLayout::Material), &gpu_layout.get(EngineLayout::Camera)])
             .build(&render_context.device);
 
         {

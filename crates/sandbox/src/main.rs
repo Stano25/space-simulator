@@ -6,7 +6,7 @@ use engine::render::camera::{self, Camera};
 use engine::window::window::WindowConfig;
 use engine::render::{context::RenderContext, mesh::{Mesh, Vertex}};
 use engine::render::material::Material;
-use engine::render::layout::GpuLayout;
+use engine::render::layout::{EngineLayout, GpuLayout};
 use engine::render::texture::{self, Texture};
 use engine::render::camera::{GpuCamera, CameraUniform, Projection, SAFE_FRAC_PI_2};
 use engine::input::input::InputState;
@@ -67,9 +67,9 @@ fn test(mut commands: Commands, render_context: Res<RenderContext>, gpu_layout: 
 
     let texture = Texture::from_bytes(&render_context.device, &render_context.queue, include_bytes!("../../../assets/textures/happy-tree.png"), "happy-tree.png").unwrap();
 
-    let material = Material::new(&render_context.device, &gpu_layout.material, Arc::new(texture));
+    let material = Material::new(&render_context.device, &gpu_layout.get(EngineLayout::Material), Arc::new(texture));
 
-    let material2 = Material::new(&render_context.device, &gpu_layout.material, Arc::new(texture2));
+    let material2 = Material::new(&render_context.device, &gpu_layout.get(EngineLayout::Material), Arc::new(texture2));
 
     commands.spawn((mesh, material));
     commands.spawn((mesh2, material2));
@@ -83,7 +83,7 @@ fn camera_system(mut query: Query<&mut Camera>, render_context: Res<RenderContex
 
     for mut camera in query.iter_mut() {
         let mut camera_uniform = CameraUniform::new();
-        
+
         let (yaw_sin, yaw_cos) = camera.yaw.sin_cos();
         let forward = glam::Vec3::new(yaw_cos, 0.0, yaw_sin).normalize();
         let right = glam::Vec3::new(-yaw_sin, 0.0, yaw_cos).normalize();
@@ -122,4 +122,4 @@ fn camera_system(mut query: Query<&mut Camera>, render_context: Res<RenderContex
         camera_uniform.update_view_proj(&camera, &projection);
         render_context.queue.write_buffer(&camera_gpu.uniform_buffer, 0, bytemuck::cast_slice(&[camera_uniform]));
     }
-}   
+}

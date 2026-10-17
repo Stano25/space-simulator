@@ -119,10 +119,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     // LAYER 2: Main starfield (medium density, twinkling, colored)
-    // final_color += render_star_layer(dir, 180.0, 0.982, 3.5, false) * 1.5;
+    final_color += render_star_layer(dir, 180.0, 0.982, 3.5, false) * 1.5;
 
     // LAYER 3: Hero stars (rare, intense, diffraction spikes)
-    // final_color += render_star_layer(dir, 55.0, 0.995, 1.5, true) * 3.5;
+    final_color += render_star_layer(dir, 55.0, 0.995, 1.5, true) * 3.5;
 
     return vec4<f32>(final_color, 1.0);
 }

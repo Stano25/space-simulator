@@ -4,8 +4,8 @@ use std::collections::HashMap;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct LayoutId {
-    type_id: TypeId,
-    index: usize,
+    pub type_id: TypeId,
+    pub index: usize,
 }
 
 #[repr(usize)]
@@ -79,6 +79,11 @@ impl LayoutRegistry {
         LayoutRegistry {
             gpu_layouts
         }
+    }
+    // shorthand for insertion into hashmap
+    pub fn insert(&mut self, key: impl IntoLayoutKey, layout: wgpu::BindGroupLayout) -> &mut Self {
+        self.gpu_layouts.insert(key.into_key(), layout);
+        self
     }
     // Direct access
     pub fn get(&self, key: impl IntoLayoutKey) -> &wgpu::BindGroupLayout {

@@ -7,8 +7,8 @@ use crate::render::mesh::Vertex;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct PipelineId {
-    type_id: TypeId,
-    index: usize,
+    pub type_id: TypeId,
+    pub index: usize,
 }
 
 #[repr(usize)]

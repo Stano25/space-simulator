@@ -5,7 +5,7 @@ use bevy_ecs::prelude::*;
 #[derive(Resource)]
 pub struct Time {
     pub(crate) delta_time: f32,
-    pub(crate) elapsed_time: f32,
+    pub elapsed_time: f32,
     last_frame_time: Instant,
 }
 

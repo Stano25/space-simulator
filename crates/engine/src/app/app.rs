@@ -34,6 +34,7 @@ pub struct App {
     pub update_schedule: Schedule,
     pub render_schedule: Schedule,
     pub window_config: WindowConfig,
+    has_custom_render_system: bool,
 }
 
 impl App {
@@ -44,6 +45,7 @@ impl App {
             update_schedule: Schedule::new(UpdateSchedule),
             render_schedule: Schedule::new(RenderSchedule),
             window_config: WindowConfig::default(),
+            has_custom_render_system: false,
         }
     }
 
@@ -62,6 +64,13 @@ impl App {
         self
     }
 
+    pub fn set_render_system<M>(mut self, system: impl IntoScheduleConfigs<ScheduleSystem, M>) -> Self {
+        self.render_schedule = Schedule::new(RenderSchedule);
+        self.render_schedule.add_systems(system);
+        self.has_custom_render_system = true;
+        self
+    }
+
     pub fn run(self) {
         // Create the event loop
         let event_loop = EventLoop::new().expect("Failed to create EventLoop");
@@ -75,7 +84,9 @@ impl App {
         self.world.insert_resource(InputState::default());
         self.world.insert_resource(PipelineRegistry::default());
         self.world.insert_resource(Time::new());
-        self.render_schedule.add_systems(render_system);
+        if !self.has_custom_render_system {
+            self.render_schedule.add_systems(render_system);
+        }
 
         let render_context = pollster::block_on(RenderContext::new(window.clone()));
 

@@ -1,16 +1,18 @@
-use core::time;
 use std::sync::Arc;
 
 use engine::app::app::App;
-use engine::render::camera::{self, Camera};
+use engine::render::camera::{Camera};
 use engine::window::window::WindowConfig;
 use engine::render::{context::RenderContext, mesh::{Mesh, Vertex}};
 use engine::render::material::Material;
 use engine::render::layout::{EngineLayout, LayoutRegistry};
-use engine::render::texture::{self, Texture};
+use engine::render::texture::{Texture};
 use engine::render::camera::{GpuCamera, CameraUniform, Projection, SAFE_FRAC_PI_2};
 use engine::input::input::InputState;
 use engine::time::time::Time;
+
+use sandbox::render::systems::sandbox_render_system;
+use sandbox::render::skybox::{setup_skybox_system, update_skybox_system};
 
 use bevy_ecs::prelude::*;
 use winit::keyboard::KeyCode;
@@ -48,13 +50,21 @@ fn main() {
             width: 1280,
             height: 720,
         })
+        // STARTUP (runs once at launch)
         .add_startup_system(test)
+        .add_startup_system(setup_skybox_system)
+
+        // UPDATE (runs every tick in about_to_wait)
         .add_system(camera_system)
+        .add_system(update_skybox_system)
+
+        // RENDER (runs on WindowEvent::RedrawRequested)
+        .set_render_system(sandbox_render_system)
         .run();
 }
 
 fn test(mut commands: Commands, render_context: Res<RenderContext>, gpu_layout: Res<LayoutRegistry>) {
-    let camera =  Camera::from_direction(
+    let camera = Camera::from_direction(
         glam::Vec3::new(0.0, 0.0, 2.0),
         glam::Vec3::new(0.0, 0.0, -1.0)
     );

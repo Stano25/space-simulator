@@ -2442,6 +2442,7 @@ dependencies = [
  "bytemuck",
  "engine",
  "glam 0.33.11",
+ "wgpu",
  "winit",
 ]
 

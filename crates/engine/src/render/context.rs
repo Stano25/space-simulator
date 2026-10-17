@@ -6,12 +6,14 @@ use bevy_ecs::prelude::Resource;
 
 #[derive(Resource)]
 pub struct RenderContext {
+    #[expect(dead_code)]
     instance: wgpu::Instance,
     pub surface: wgpu::Surface<'static>,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
     pub config: wgpu::SurfaceConfiguration,
     pub size: (u32, u32),
+    #[expect(dead_code)]
     window: Arc<Window>,
 }
 
@@ -57,7 +59,7 @@ impl RenderContext {
             height: size.height,
             present_mode: surface_capabilities.present_modes[0],
             alpha_mode: surface_capabilities.alpha_modes[0],
-            view_formats: vec![],   
+            view_formats: vec![],
             desired_maximum_frame_latency: 2,
             color_space: wgpu::SurfaceColorSpace::Auto
         };

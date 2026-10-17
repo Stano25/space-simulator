@@ -1,6 +1,6 @@
 use std::f32::consts::FRAC_PI_2;
 
-use glam::{Mat4, Vec3, camera}; 
+use glam::{Mat4, Vec3};
 use glam::camera::rh::{view::look_at_mat4, proj::directx::perspective};
 
 use bevy_ecs::prelude::*;

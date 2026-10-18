@@ -13,6 +13,7 @@ pub struct LayoutId {
 pub enum EngineLayout {
     Material,
     Camera,
+    Instance,
 }
 
 pub trait IntoLayoutKey: Copy + 'static {
@@ -73,9 +74,26 @@ impl LayoutRegistry {
             label: Some("Camera Bind Group Layout"),
         });
 
+        let instance_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None
+                    },
+                    count: None,
+                },
+            ],
+            label: Some("Instance Storage Layout"),
+        });
+
         let mut gpu_layouts: HashMap<LayoutId, wgpu::BindGroupLayout> = HashMap::new();
         gpu_layouts.insert(EngineLayout::Material.into_key(), material_layout);
         gpu_layouts.insert(EngineLayout::Camera.into_key(), camera_layout);
+        gpu_layouts.insert(EngineLayout::Instance.into_key(), instance_layout);
         LayoutRegistry {
             gpu_layouts
         }

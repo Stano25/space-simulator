@@ -6,3 +6,4 @@ pub mod material;
 pub mod texture;
 pub mod layout;
 pub mod camera;
+pub mod instance;

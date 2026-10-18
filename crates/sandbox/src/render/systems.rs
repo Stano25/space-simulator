@@ -1,12 +1,18 @@
 use bevy_ecs::prelude::*;
 
 use engine::render::{
-    camera::GpuCamera,
-    context::RenderContext,
-    material::Material,
-    mesh::Mesh,
+    camera::GpuCamera, 
+    context::RenderContext, 
+    instance::{InstanceManager, InstanceRaw, Trnasform, BatchGroup, DrawBatch}, 
+    layout::{EngineLayout, LayoutRegistry}, 
+    material::Material, 
+    mesh::{GpuMesh, Mesh}, 
     pipeline::{EnginePipeline, PipelineRegistry},
+    material::GpuMaterial,
 };
+
+use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::keys::SandboxPipeline;
 use crate::render::skybox::GpuSkybox;
@@ -14,8 +20,10 @@ use crate::render::skybox::GpuSkybox;
 pub fn sandbox_render_system(
     mut render_context: ResMut<RenderContext>,
     pipeline_registry: Res<PipelineRegistry>,
-    query: Query<(&Mesh, &Material)>,
+    query: Query<(&Mesh, &Material, &Trnasform)>,
     camera: Res<GpuCamera>,
+    mut instance_manager: ResMut<InstanceManager>,
+    layouts: Res<LayoutRegistry>,
     skybox: Option<Res<GpuSkybox>>, // <--- Injected cleanly from sandbox
 ) {
     let current_surface_texture = render_context.surface.get_current_texture();
@@ -28,6 +36,51 @@ pub fn sandbox_render_system(
         }
         _ => return,
     };
+
+    type BatchKey = (*const GpuMesh, *const GpuMaterial);
+
+    let mut groups: HashMap<BatchKey, BatchGroup> = HashMap::new();
+
+    for (mesh, material, transform) in query.iter() {
+        let key = (Arc::as_ptr(&mesh.gpu_mesh), Arc::as_ptr(&material.gpu_material));
+        let batch_group = groups.entry(key).or_insert_with(|| BatchGroup {
+            mesh: Arc::clone(&mesh.gpu_mesh),
+            material: Arc::clone(&material.gpu_material),
+            instances: Vec::new(),
+        });
+
+        let instance_raw = InstanceRaw::from_transform(transform);
+        batch_group.instances.push(instance_raw);
+    }
+
+    let mut all_instances: Vec<InstanceRaw> = Vec::new();
+    let mut batches: Vec<DrawBatch> = Vec::new();
+
+    for (_, group) in groups {
+        let start_instance = all_instances.len() as u32;
+        let count = group.instances.len() as u32;
+
+        all_instances.extend_from_slice(&group.instances);
+
+        batches.push(DrawBatch {
+            mesh: group.mesh,
+            material: group.material,
+            start_instance,
+            count,
+        });
+    }
+
+    instance_manager.ensure_capacity(
+        &render_context.device,
+        &layouts.get(EngineLayout::Instance),
+        all_instances.len(),
+    );
+
+    render_context.queue.write_buffer(
+        &instance_manager.buffer,
+        0,
+        bytemuck::cast_slice(&all_instances),
+    );
 
     let image_view = drawable.texture.create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -69,13 +122,19 @@ pub fn sandbox_render_system(
         if let Some(default_pipeline) = pipeline_registry.try_get(EnginePipeline::Default) {
             render_pass.set_pipeline(default_pipeline);
 
-            for (mesh, material) in query.iter() {
-                render_pass.set_bind_group(0, &material.gpu_material.bind_group, &[]);
-                render_pass.set_bind_group(1, &camera.bind_group, &[]);
+            render_pass.set_bind_group(1, &camera.bind_group, &[]);
+            render_pass.set_bind_group(2, &instance_manager.bind_group, &[]);
 
-                render_pass.set_vertex_buffer(0, mesh.gpu_mesh.vertex_buffer.slice(..));
-                render_pass.set_index_buffer(mesh.gpu_mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-                render_pass.draw_indexed(0..mesh.gpu_mesh.index_count, 0, 0..1);
+            for batch in batches {
+                render_pass.set_bind_group(0, &batch.material.bind_group, &[]);
+
+                render_pass.set_vertex_buffer(0, batch.mesh.vertex_buffer.slice(..));
+                render_pass.set_index_buffer(batch.mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                render_pass.draw_indexed(
+                    0..batch.mesh.index_count,
+                    0,
+                    batch.start_instance..(batch.start_instance + batch.count),
+                );
             }
         }
     }

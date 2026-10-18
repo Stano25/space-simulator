@@ -7,6 +7,7 @@ use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::ScheduleLabel;
 use bevy_ecs::system::ScheduleSystem;
 
+use crate::render::instance::InstanceManager;
 use crate::render::pipeline::EnginePipeline;
 use crate::time::time::Time;
 use crate::window::window::WindowConfig;
@@ -102,13 +103,15 @@ impl App {
 
         let projection = Projection::new(render_context.size.0 as f32 / render_context.size.1 as f32, 45.0_f32.to_radians(), 0.1, 100.0);
 
+        let instance = InstanceManager::new(&render_context.device, &gpu_layout.get(EngineLayout::Instance), 128);
+
         let default_pipeline = PipelineBuilder::new(include_str!("../../../../assets/shaders/shader.wgsl"))
             .with_pixel_format(render_context.config.format)
-            .with_layouts(&[&gpu_layout.get(EngineLayout::Material), &gpu_layout.get(EngineLayout::Camera)])
+            .with_layouts(&[&gpu_layout.get(EngineLayout::Material), &gpu_layout.get(EngineLayout::Camera), &gpu_layout.get(EngineLayout::Instance)])
             .build(&render_context.device);
 
         {
-            let mut pipeline_registry = self.world.resource_mut::<PipelineRegistry>();
+            let mut pipeline_registry = self.world.resource_mut::<PipelineRegistry>();  
             pipeline_registry.insert(EnginePipeline::Default, default_pipeline);
         }
 
@@ -116,5 +119,6 @@ impl App {
         self.world.insert_resource(gpu_layout);
         self.world.insert_resource(gpu_camera);
         self.world.insert_resource(render_context);
+        self.world.insert_resource(instance);
     }
 }

@@ -10,6 +10,7 @@ use engine::render::texture::{Texture};
 use engine::render::camera::{GpuCamera, CameraUniform, Projection, SAFE_FRAC_PI_2};
 use engine::input::input::InputState;
 use engine::time::time::Time;
+use engine::render::instance::{Trnasform};
 
 use sandbox::render::systems::sandbox_render_system;
 use sandbox::render::skybox::{setup_skybox_system, update_skybox_system};
@@ -76,6 +77,24 @@ fn test(mut commands: Commands, render_context: Res<RenderContext>, gpu_layout: 
 
     let mesh2 = Mesh::new(&render_context.device, VERTICES2, INDICES2);
 
+    let transform = Trnasform {
+        position: glam::Vec3::new(0.0, 0.0, 0.0),
+        rotation: glam::Quat::IDENTITY,
+        scale: glam::Vec3::new(1.0, 1.0, 1.0),
+    };
+
+    let transform2 = Trnasform {
+        position: glam::Vec3::new(2.0, 0.0, 0.0),
+        rotation: glam::Quat::IDENTITY,
+        scale: glam::Vec3::new(1.0, 1.0, 1.0),
+    };
+
+    let transform3 = Trnasform {
+        position: glam::Vec3::new(0.0, -10.0, -5.0),
+        rotation: glam::Quat::IDENTITY,
+        scale: glam::Vec3::new(10.0, 10.0, 10.0),
+    };
+
     let texture2 = Texture::from_bytes(&render_context.device, &render_context.queue, include_bytes!("../../../assets/textures/roman.png"), "roman.png").unwrap();
 
     let texture = Texture::from_bytes(&render_context.device, &render_context.queue, include_bytes!("../../../assets/textures/happy-tree.png"), "happy-tree.png").unwrap();
@@ -84,8 +103,9 @@ fn test(mut commands: Commands, render_context: Res<RenderContext>, gpu_layout: 
 
     let material2 = Material::new(&render_context.device, &gpu_layout.get(EngineLayout::Material), Arc::new(texture2));
 
-    commands.spawn((mesh, material));
-    commands.spawn((mesh2, material2));
+    commands.spawn((mesh, material, transform));
+    commands.spawn((mesh2.clone(), material2.clone(), transform2));
+    commands.spawn((mesh2.clone(), material2.clone(), transform3));
     commands.spawn(camera);
 }
 

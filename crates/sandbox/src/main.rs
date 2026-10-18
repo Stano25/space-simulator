@@ -3,7 +3,7 @@ use std::sync::Arc;
 use engine::app::app::App;
 use engine::render::camera::{Camera};
 use engine::window::window::WindowConfig;
-use engine::render::{context::RenderContext, mesh::{Mesh, Vertex}};
+use engine::render::{context::{RenderContext, RenderConfig}, mesh::{Mesh, Vertex}};
 use engine::render::material::Material;
 use engine::render::layout::{EngineLayout, LayoutRegistry};
 use engine::render::texture::{Texture};
@@ -45,18 +45,21 @@ const INDICES: &[u16] = &[
 
 fn main() {
     App::new()
-        .set_window(WindowConfig {
+        .set_window_config(WindowConfig {
             title: "Space Simulator".to_string(),
             width: 1280,
             height: 720,
         })
+        .set_render_config( RenderConfig {
+            vsync: true, 
+            ..Default::default()
+        })
+
         // STARTUP (runs once at launch)
-        .add_startup_system(test)
-        .add_startup_system(setup_skybox_system)
+        .add_startup_system((test, setup_skybox_system))
 
         // UPDATE (runs every tick in about_to_wait)
-        .add_system(camera_system)
-        .add_system(update_skybox_system)
+        .add_system((camera_system, update_skybox_system))
 
         // RENDER (runs on WindowEvent::RedrawRequested)
         .set_render_system(sandbox_render_system)

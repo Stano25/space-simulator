@@ -13,7 +13,7 @@ use crate::window::window::WindowConfig;
 use crate::app::runner::AppRunner;
 use crate::input::input::InputState;
 use crate::render::{systems::render_system,
-                    context::RenderContext,
+                    context::{RenderContext, RenderConfig},
                     pipeline::{PipelineBuilder, PipelineRegistry},
                     layout::{LayoutRegistry, EngineLayout},
                     camera::{GpuCamera, Projection}};
@@ -34,6 +34,7 @@ pub struct App {
     pub update_schedule: Schedule,
     pub render_schedule: Schedule,
     pub window_config: WindowConfig,
+    pub render_config: RenderConfig,
     has_custom_render_system: bool,
 }
 
@@ -45,12 +46,18 @@ impl App {
             update_schedule: Schedule::new(UpdateSchedule),
             render_schedule: Schedule::new(RenderSchedule),
             window_config: WindowConfig::default(),
+            render_config: RenderConfig::default(),
             has_custom_render_system: false,
         }
     }
 
-    pub fn set_window(mut self, config: WindowConfig) -> Self {
+    pub fn set_window_config(mut self, config: WindowConfig) -> Self {
         self.window_config = config;
+        self
+    }
+
+    pub fn set_render_config(mut self, config: RenderConfig) -> Self {
+        self.render_config = config;
         self
     }
 
@@ -65,7 +72,6 @@ impl App {
     }
 
     pub fn set_render_system<M>(mut self, system: impl IntoScheduleConfigs<ScheduleSystem, M>) -> Self {
-        self.render_schedule = Schedule::new(RenderSchedule);
         self.render_schedule.add_systems(system);
         self.has_custom_render_system = true;
         self
@@ -88,7 +94,7 @@ impl App {
             self.render_schedule.add_systems(render_system);
         }
 
-        let render_context = pollster::block_on(RenderContext::new(window.clone()));
+        let render_context = pollster::block_on(RenderContext::new(window.clone(),self.render_config.clone()));
 
         let gpu_layout = LayoutRegistry::new(&render_context.device);
 

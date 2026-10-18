@@ -4,6 +4,23 @@ use winit::window::Window;
 
 use bevy_ecs::prelude::Resource;
 
+#[derive(Debug, Clone)]
+pub struct RenderConfig {
+    pub vsync: bool,
+    pub power_preference: wgpu::PowerPreference,
+    pub backend: wgpu::Backends,
+}
+
+impl Default for RenderConfig {
+    fn default() -> Self {
+        Self {
+            vsync: false,
+            power_preference: wgpu::PowerPreference::default(),
+            backend: wgpu::Backends::PRIMARY,
+        }
+    }
+}
+
 #[derive(Resource)]
 pub struct RenderContext {
     #[expect(dead_code)]
@@ -18,11 +35,11 @@ pub struct RenderContext {
 }
 
 impl RenderContext {
-    pub async fn new(window: Arc<Window>) -> Self{
+    pub async fn new(window: Arc<Window>, render_config: RenderConfig) -> Self{
         let size = window.inner_size();
 
         let instance_descriptor = wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::PRIMARY,
+            backends: render_config.backend,
             flags: Default::default(),
             memory_budget_thresholds: Default::default(),
             backend_options: Default::default(),
@@ -33,7 +50,7 @@ impl RenderContext {
         let surface = instance.create_surface(window.clone()).expect("Failed to create surface");
 
         let adapter_descriptor = wgpu::RequestAdapterOptions{
-            power_preference: wgpu::PowerPreference::default(),
+            power_preference: render_config.power_preference,
             compatible_surface: Some(&surface),
             force_fallback_adapter: false,
             apply_limit_buckets: false, // Only for browser, not needed for desktop
@@ -49,15 +66,19 @@ impl RenderContext {
         let (device, queue) = adapter.request_device(&device_descriptor).await.expect("Failed to request device");
 
         let surface_capabilities = surface.get_capabilities(&adapter);
+        
         let surface_format  = surface_capabilities.formats.iter()
             .copied().filter(|f| f.is_srgb())
             .next().unwrap_or(surface_capabilities.formats[0]);
+
+        let present_mode = if render_config.vsync { wgpu::PresentMode::AutoVsync } else { wgpu::PresentMode::AutoNoVsync };
+
         let surface_configuration = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: surface_format,
             width: size.width,
             height: size.height,
-            present_mode: surface_capabilities.present_modes[0],
+            present_mode: present_mode,
             alpha_mode: surface_capabilities.alpha_modes[0],
             view_formats: vec![],
             desired_maximum_frame_latency: 2,

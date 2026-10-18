@@ -148,3 +148,74 @@ pub fn update_skybox_system(
         bytemuck::cast_slice(&[uniforms]),
     );
 }
+
+// Generates a 64x64x64 repeating 3D Voronoi noise texture (256 KB)
+pub fn generate_seamless_3d_voronoi(tex_size: usize, cell_count: usize) -> Vec<u8> {
+    use glam::Vec3;
+
+    // 1. Generate random seed points for each repeating cell
+    let mut points = vec![Vec3::ZERO; cell_count * cell_count * cell_count];
+    for z in 0..cell_count {
+        for y in 0..cell_count {
+            for x in 0..cell_count {
+                // Pseudo-random jitter inside the cell
+                let seed = (x * 73856093 ^ y * 19349663 ^ z * 83492791) as f32;
+                let jx = (seed * 0.1031).fract() * 0.8 + 0.1;
+                let jy = (seed * 0.1030).fract() * 0.8 + 0.1;
+                let jz = (seed * 0.0973).fract() * 0.8 + 0.1;
+
+                let idx = z * cell_count * cell_count + y * cell_count + x;
+                points[idx] = Vec3::new(x as f32 + jx, y as f32 + jy, z as f32 + jz);
+            }
+        }
+    }
+
+    // 2. Evaluate minimum distance for each voxel in the 3D texture
+    let mut data = vec![0u8; tex_size * tex_size * tex_size];
+    let inv_tex = cell_count as f32 / tex_size as f32;
+
+    for tz in 0..tex_size {
+        for ty in 0..tex_size {
+            for tx in 0..tex_size {
+                let pos = Vec3::new(tx as f32, ty as f32, tz as f32) * inv_tex;
+                let cell_base = pos.floor();
+
+                let mut min_dist = 10.0f32;
+
+                // Check 3x3x3 repeating neighborhood
+                for dz in -1..=1 {
+                    for dy in -1..=1 {
+                        for dx in -1..=1 {
+                            let cx = (cell_base.x as i32 + dx).rem_euclid(cell_count as i32) as usize;
+                            let cy = (cell_base.y as i32 + dy).rem_euclid(cell_count as i32) as usize;
+                            let cz = (cell_base.z as i32 + dz).rem_euclid(cell_count as i32) as usize;
+
+                            let idx = cz * cell_count * cell_count + cy * cell_count + cx;
+                            let pt = points[idx];
+
+                            // Wrap-around distance for seamless tiling
+                            let mut diff = pt - pos;
+                            if diff.x > cell_count as f32 * 0.5 { diff.x -= cell_count as f32; }
+                            if diff.x < (0.-cell_count as f32 * 0.5) { diff.x += cell_count as f32; }
+                            if diff.y > cell_count as f32 * 0.5 { diff.y -= cell_count as f32; }
+                            if diff.y < (0.-cell_count as f32 * 0.5) { diff.y += cell_count as f32; }
+                            if diff.z > cell_count as f32 * 0.5 { diff.z -= cell_count as f32; }
+                            if diff.z < (0.-cell_count as f32 * 0.5) { diff.z += cell_count as f32; }
+
+                            min_dist = min_dist.min(diff.length());
+                        }
+                    }
+                }
+
+                // Invert so cell centers are 1.0 (bright) and edges are 0.0 (dark)
+                let intensity = (1.0 - (min_dist * 1.4)).clamp(0.0, 1.0);
+                let byte_val = (intensity * 255.0) as u8;
+
+                let write_idx = tz * tex_size * tex_size + ty * tex_size + tx;
+                data[write_idx] = byte_val;
+            }
+        }
+    }
+
+    data
+}

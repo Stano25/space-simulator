@@ -43,7 +43,28 @@ fn star_color(seed: f32) -> vec3<f32> {
     }
 }
 
-// Single, robust star generator for ALL layers (No neighbor loop needed!)
+// ---------------------------------------------------------------------------
+// Star layer: seamless, no cube faces, no projection.
+//
+// The view direction is scaled by `scale` and a plain 3D integer grid is laid
+// over the result. Every cell may hold one star at a jittered 3D position. The
+// star is then pushed onto the unit sphere (normalize) and its distance to the
+// pixel is measured in 3D between two unit vectors, so the profile is perfectly
+// circular everywhere on the sky.
+//
+// Why there are no seams: a 3D grid has no faces or edges that mean anything to
+// the sky. The cell lookup is the same function of the direction in every
+// direction, and each star is kept or dropped purely from its own fixed
+// position (never from the view), so nothing can pop or get cut.
+//
+// Lookup safety: only stars whose radius is within SHELL_HALF of `scale` are
+// kept. The pixel point p = dir * scale lies on that shell, so any kept star
+// within ~0.7 cell units of the pixel is always inside the 3x3x3 neighbourhood.
+// Glow beyond that distance is below 1e-4, which is invisible.
+// ---------------------------------------------------------------------------
+const SHELL_HALF: f32 = 0.5;
+const JITTER: f32 = 0.7;
+
 fn render_star_layer(
     dir: vec3<f32>,
     scale: f32,
@@ -52,27 +73,49 @@ fn render_star_layer(
     core_sharpness: f32,
     halo_size: f32
 ) -> vec3<f32> {
-    let grid = floor(dir * scale);
-    let rnd = hash3(grid);
+    let base_cell = floor(dir * scale);
 
-    if (rnd.x < threshold) {
-        return vec3<f32>(0.0);
+    // Decorrelates the layers, which would otherwise hash identical integer cells.
+    let layer_seed = vec3<f32>(scale * 13.7);
+
+    var star_accum = vec3<f32>(0.0);
+
+    for (var z = -1; z <= 1; z++) {
+        for (var y = -1; y <= 1; y++) {
+            for (var x = -1; x <= 1; x++) {
+                let cell = base_cell + vec3<f32>(f32(x), f32(y), f32(z));
+
+                let rnd = hash3(cell + layer_seed);
+                if (rnd.x < threshold) {
+                    continue;
+                }
+
+                // Jittered 3D position inside the cell
+                let jit = hash3(cell + layer_seed + vec3<f32>(41.7, 13.3, 29.1));
+                let star_pos = cell + 0.5 + (jit - 0.5) * JITTER;
+
+                // Keep only stars near the shell the sky sphere sits in
+                let r = length(star_pos);
+                if (abs(r - scale) > SHELL_HALF) {
+                    continue;
+                }
+
+                // Push onto the unit sphere, measure the isotropic distance
+                let star_dir = star_pos / r;
+                let d = length(dir - star_dir) * scale;
+
+                let core = exp(-d * d * core_sharpness);
+                let halo = exp(-d * halo_size) * 0.12;
+                let glow = core + halo;
+
+                // rnd.x is uniform in [threshold, 1), so remap it to [0, 1) for the color
+                let color_seed = (rnd.x - threshold) / (1.0 - threshold);
+                star_accum += star_color(color_seed) * glow * brightness;
+            }
+        }
     }
 
-    // Keep offset safely inside [-0.25, 0.25] so stars never touch cell borders
-    let star_raw_pos = grid + 0.5 + (rnd - 0.5) * 0.5;
-    let star_dir = normalize(star_raw_pos);
-
-    let diff = (dir - star_dir) * scale;
-    let d = length(diff);
-
-    // Realistic optical point-source: blistering core + soft airy halo
-    let core = exp(-d * d * core_sharpness);
-    let halo = exp(-d * halo_size) * 0.12;
-    let glow = core + halo;
-
-    let color = star_color(rnd.z);
-    return color * glow * brightness;
+    return star_accum;
 }
 
 @fragment
@@ -84,13 +127,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     var final_color = vec3<f32>(0.001, 0.002, 0.004);
 
     // LAYER 1: Dense microscopic background stars
-    final_color += render_star_layer(dir, 400.0, 0.940, 0.6, 500.0, 30.0);
+    final_color += render_star_layer(dir, 250.0, 0.885, 0.6, 500.0, 30.0);
 
     // LAYER 2: Medium visible stars
-    final_color += render_star_layer(dir, 160.0, 0.970, 1.4, 300.0, 22.0);
+    final_color += render_star_layer(dir, 100.0, 0.943, 1.4, 300.0, 22.0);
 
-    // LAYER 3: Hero prominent stars (Pure intense white-hot cores + soft halos)
-    final_color += render_star_layer(dir, 60.0, 0.990, 3.2, 160.0, 12.0);
+    // LAYER 3: Hero prominent stars
+    final_color += render_star_layer(dir, 40.0, 0.981, 3.2, 160.0, 14.0);
 
     return vec4<f32>(final_color, 1.0);
 }

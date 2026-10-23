@@ -11,7 +11,7 @@ pub struct InstanceRaw {
 }
 
 impl InstanceRaw {
-    pub fn from_transform(transform: &Trnasform) -> Self {
+    pub fn from_transform(transform: &Transform) -> Self {
         let model_matrix = glam::Mat4::from_scale_rotation_translation(
             transform.scale,
             transform.rotation,
@@ -24,7 +24,7 @@ impl InstanceRaw {
 }
 
 #[derive(Component, Debug, Clone)]
-pub struct Trnasform {
+pub struct Transform {
     pub position: Vec3,
     pub rotation: Quat,
     pub scale: Vec3,

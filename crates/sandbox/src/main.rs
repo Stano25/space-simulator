@@ -10,7 +10,7 @@ use engine::render::texture::{Texture};
 use engine::render::camera::{GpuCamera, CameraUniform, Projection, SAFE_FRAC_PI_2};
 use engine::input::input::InputState;
 use engine::time::time::Time;
-use engine::render::instance::{Trnasform};
+use engine::render::instance::{Transform};
 
 use sandbox::render::systems::sandbox_render_system;
 use sandbox::render::skybox::{setup_skybox_system, update_skybox_system};
@@ -52,7 +52,7 @@ fn main() {
             height: 720,
         })
         .set_render_config( RenderConfig {
-            vsync: true, 
+            vsync: true,
             ..Default::default()
         })
 
@@ -77,19 +77,19 @@ fn test(mut commands: Commands, render_context: Res<RenderContext>, gpu_layout: 
 
     let mesh2 = Mesh::new(&render_context.device, VERTICES2, INDICES2);
 
-    let transform = Trnasform {
+    let transform = Transform {
         position: glam::Vec3::new(0.0, 0.0, 0.0),
         rotation: glam::Quat::IDENTITY,
         scale: glam::Vec3::new(1.0, 1.0, 1.0),
     };
 
-    let transform2 = Trnasform {
+    let transform2 = Transform {
         position: glam::Vec3::new(2.0, 0.0, 0.0),
         rotation: glam::Quat::IDENTITY,
         scale: glam::Vec3::new(1.0, 1.0, 1.0),
     };
 
-    let transform3 = Trnasform {
+    let transform3 = Transform {
         position: glam::Vec3::new(0.0, -10.0, -5.0),
         rotation: glam::Quat::IDENTITY,
         scale: glam::Vec3::new(10.0, 10.0, 10.0),

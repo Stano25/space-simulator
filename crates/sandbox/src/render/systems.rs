@@ -1,12 +1,12 @@
 use bevy_ecs::prelude::*;
 
 use engine::render::{
-    camera::GpuCamera, 
-    context::RenderContext, 
-    instance::{InstanceManager, InstanceRaw, Trnasform, BatchGroup, DrawBatch}, 
-    layout::{EngineLayout, LayoutRegistry}, 
-    material::Material, 
-    mesh::{GpuMesh, Mesh}, 
+    camera::GpuCamera,
+    context::RenderContext,
+    instance::{InstanceManager, InstanceRaw, Transform, BatchGroup, DrawBatch},
+    layout::{EngineLayout, LayoutRegistry},
+    material::Material,
+    mesh::{GpuMesh, Mesh},
     pipeline::{EnginePipeline, PipelineRegistry},
     material::GpuMaterial,
 };
@@ -20,11 +20,11 @@ use crate::render::skybox::GpuSkybox;
 pub fn sandbox_render_system(
     mut render_context: ResMut<RenderContext>,
     pipeline_registry: Res<PipelineRegistry>,
-    query: Query<(&Mesh, &Material, &Trnasform)>,
+    query: Query<(&Mesh, &Material, &Transform)>,
     camera: Res<GpuCamera>,
     mut instance_manager: ResMut<InstanceManager>,
     layouts: Res<LayoutRegistry>,
-    skybox: Option<Res<GpuSkybox>>, // <--- Injected cleanly from sandbox
+    skybox: Option<Res<GpuSkybox>>,
 ) {
     let current_surface_texture = render_context.surface.get_current_texture();
     let drawable = match current_surface_texture {

@@ -28,6 +28,19 @@ fn hash13_fast(p: vec3<f32>) -> f32 {
     return fract((q.x + q.y) * q.z);
 }
 
+fn hash_u32_1d(p: vec3<i32>) -> f32 {
+    var v = vec3<u32>(p) * 1664525u + 1013904223u;
+    v.x += v.y * v.z;
+    v.y += v.z * v.x;
+    v.z += v.x * v.y;
+    v ^= v >> vec3<u32>(16u);
+    v.x += v.y * v.z;
+    v.y += v.z * v.x;
+    v.z += v.x * v.y;
+    let h = v.x + v.y * 31u + v.z * 137u;
+    return f32(h) * (1.0 / 4294967296.0);
+}
+
 // Full 2-round PCG Integer Hash (100% Avalanche, Zero Lines)
 fn hash_star_u32(p: vec3<i32>) -> vec3<f32> {
     var v = vec3<u32>(p) * 1664525u + 1013904223u;
@@ -61,22 +74,28 @@ fn get_vivid_star_color(seed: f32) -> vec3<f32> {
 // ---------------------------------------------------------------------------
 // 3. Fast 3D Noise & Nebula Math
 // ---------------------------------------------------------------------------
-fn noise3d_fast(p: vec3<f32>) -> f32 {
+fn noise3d(p: vec3<f32>) -> f32 {
     let fl = floor(p);
     let f = p - fl;
-    let u = f * f * (3.0 - 2.0 * f);
+
+    // Ken Perlin's quintic curve: 6f^5 - 15f^4 + 10f^3 (continuous 2nd derivative)
+    let u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+
+    let i0 = vec3<i32>(fl);
+
+    let c000 = hash_u32_1d(i0 + vec3<i32>(0, 0, 0));
+    let c100 = hash_u32_1d(i0 + vec3<i32>(1, 0, 0));
+    let c010 = hash_u32_1d(i0 + vec3<i32>(0, 1, 0));
+    let c110 = hash_u32_1d(i0 + vec3<i32>(1, 1, 0));
+
+    let c001 = hash_u32_1d(i0 + vec3<i32>(0, 0, 1));
+    let c101 = hash_u32_1d(i0 + vec3<i32>(1, 0, 1));
+    let c011 = hash_u32_1d(i0 + vec3<i32>(0, 1, 1));
+    let c111 = hash_u32_1d(i0 + vec3<i32>(1, 1, 1));
 
     return mix(
-        mix(
-            mix(hash13_fast(fl + vec3<f32>(0.0, 0.0, 0.0)), hash13_fast(fl + vec3<f32>(1.0, 0.0, 0.0)), u.x),
-            mix(hash13_fast(fl + vec3<f32>(0.0, 1.0, 0.0)), hash13_fast(fl + vec3<f32>(1.0, 1.0, 0.0)), u.x),
-            u.y
-        ),
-        mix(
-            mix(hash13_fast(fl + vec3<f32>(0.0, 0.0, 1.0)), hash13_fast(fl + vec3<f32>(1.0, 0.0, 1.0)), u.x),
-            mix(hash13_fast(fl + vec3<f32>(0.0, 1.0, 1.0)), hash13_fast(fl + vec3<f32>(1.0, 1.0, 1.0)), u.x),
-            u.y
-        ),
+        mix(mix(c000, c100, u.x), mix(c010, c110, u.x), u.y),
+        mix(mix(c001, c101, u.x), mix(c011, c111, u.x), u.y),
         u.z
     );
 }
@@ -85,10 +104,10 @@ fn fbm(p: vec3<f32>) -> f32 {
     var v = 0.0;
     var amp = 0.5;
     var pos = p;
-    for (var i = 0; i < 4; i++) {
-        v += amp * noise3d_fast(pos);
-        pos = pos * 2.04 + vec3<f32>(1.2, 5.8, 3.4);
-        amp *= 0.5;
+    for (var i = 0; i < 6; i++) {
+        v += amp * noise3d(pos);
+        pos = pos * 2.02 + vec3<f32>(1.2, 5.8, 3.4);
+        amp *= 0.52;
     }
     return v;
 }
@@ -112,11 +131,11 @@ fn get_galactic_coords(dir: vec3<f32>) -> GalacticCoords {
 }
 
 fn render_milky_way(dir: vec3<f32>, gal: GalacticCoords) -> vec3<f32> {
-    if (gal.disk_mask < 0.005) {
+    if (gal.disk_mask < 0.001) {
         return vec3<f32>(0.0);
     }
 
-    let p = (dir + vec3<f32>(2.0, 2.0, 2.0)) * 2.8;
+    let p = dir * 2.8;
 
     let warp = vec3<f32>(
         fbm(p + vec3<f32>(1.7, 9.2, 0.4)),
@@ -125,32 +144,31 @@ fn render_milky_way(dir: vec3<f32>, gal: GalacticCoords) -> vec3<f32> {
     );
     let gas = fbm(p + warp * 1.15);
 
-    let rift_p = (dir + vec3<f32>(3.0, 3.0, 3.0)) * 6.5 + warp * 0.75;
+    let rift_p = dir * 6.5 + warp * 0.75;
     let dust_noise = fbm(rift_p + vec3<f32>(3.1, 7.4, 1.2));
-    let dust_absorption = smoothstep(0.26, 0.70, dust_noise);
+    let dust_absorption = smoothstep(0.24, 0.72, dust_noise);
 
-    let gas_profile = smoothstep(0.20, 0.80, gas);
+    // Soft power curve instead of hard smoothstep cutoff: dissolves smoothly!
+    let gas_profile = pow(gas, 1.55);
     let raw_intensity = (gal.disk_mask * 0.65 + gal.core_mask * 0.90) * gas_profile;
 
     var intensity = raw_intensity * (0.05 + 0.95 * dust_absorption);
 
-    let grain = hash13_fast(floor((dir + vec3<f32>(2.0, 2.0, 2.0)) * 500.0));
-    intensity *= (0.90 + 0.20 * grain);
+    // Subtle micro-starlight grain
+    let grain = hash_u32_1d(vec3<i32>(floor(dir * 500.0)));
+    intensity *= (0.92 + 0.16 * grain);
 
     intensity = 0.90 * (intensity / (0.38 + intensity));
 
-    if (intensity <= 0.001) {
-        return vec3<f32>(0.0);
-    }
-
+    // Smooth color transitions
     let col_void  = vec3<f32>(0.015, 0.008, 0.035);
     let col_plum  = vec3<f32>(0.280, 0.100, 0.260);
     let col_rose  = vec3<f32>(0.840, 0.380, 0.640);
     let col_peach = vec3<f32>(1.000, 0.740, 0.540);
 
-    var col = mix(col_void, col_plum, smoothstep(0.0, 0.28, intensity));
-    col = mix(col, col_rose, smoothstep(0.28, 0.65, intensity));
-    col = mix(col, col_peach, smoothstep(0.65, 0.90, intensity));
+    var col = mix(col_void, col_plum, smoothstep(0.0, 0.25, intensity));
+    col = mix(col, col_rose, smoothstep(0.25, 0.62, intensity));
+    col = mix(col, col_peach, smoothstep(0.62, 0.90, intensity));
     col = mix(col, vec3<f32>(1.00, 0.66, 0.44), gal.core_mask * 0.45);
 
     return col * intensity;
@@ -270,35 +288,38 @@ fn cs_main(@builtin(global_invocation_id) id: vec3<u32>) {
     final_color += render_milky_way(dir, gal);
 
     // 2. LAYER 1: Microscopic Stardust Carpet
-    // Tightened back to true tiny pinpricks (zero halo, 90% saturated color)
     final_color += render_procedural_star_layer(
         dir,
-        210.0,              // scale
-        0.815,              // threshold (frequent)
-        0.70,               // brightness
-        380.0,              // core sharpness (needle pinpricks!)
-        50.0,               // halo size
-        0.0,                // halo_strength = 0.0 (NO fuzzy halo, pure crisp specks)
-        0.10,               // white_core_mix = 0.10 (90% pure color, never desaturates)
+        210.0,
+        0.815,
+        0.70,
+        380.0,
+        50.0,
+        0.0,
+        0.10,
         gal.disk_mask * 0.04
     );
 
     // 3. LAYER 2: Medium Visible Stars
-    // Tightened to small ~2-3px crisp dots
     final_color += render_procedural_star_layer(
         dir,
-        75.0,               // scale
-        0.950,              // threshold
-        1.35,               // brightness
-        220.0,              // core sharpness (~2-3px tight disc)
-        38.0,               // halo size
-        0.05,               // subtle, restrained aura
-        0.30,               // white_core_mix (70% pure color)
+        75.0,
+        0.950,
+        1.35,
+        220.0,
+        38.0,
+        0.05,
+        0.30,
         0.0
     );
 
-    // 4. LAYER 3: Hero Landmark Beacons (Fibonacci Analytical)
+    // 4. LAYER 3: Hero Landmark Beacons
     final_color += render_hero_stars_analytical(dir, size);
+
+    // 5. ANTI-BANDING DITHER (TPDF):
+    // Adds a tiny fraction (+/- 0.75 / 255.0) of noise to break up 8-bit color steps!
+    let dither = (hash13_fast(vec3<f32>(f32(id.x), f32(id.y), f32(id.z) * 19.1)) - 0.5) * (1.5 / 255.0);
+    final_color += vec3<f32>(dither);
 
     // Write directly into the cubemap face!
     textureStore(output_cubemap, id.xy, id.z, vec4<f32>(final_color, 1.0));

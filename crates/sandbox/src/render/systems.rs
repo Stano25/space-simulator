@@ -99,7 +99,14 @@ pub fn sandbox_render_system(
             },
             depth_slice: None,
         })],
-        depth_stencil_attachment: None,
+        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+            view: &render_context.depth_texture.view,
+            depth_ops: Some(wgpu::Operations {
+                load: wgpu::LoadOp::Clear(0.0),
+                store: wgpu::StoreOp::Store,
+            }),
+            stencil_ops: None,
+        }),
         occlusion_query_set: None,
         multiview_mask: None,
         timestamp_writes: None,

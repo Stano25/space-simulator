@@ -4,6 +4,7 @@ use std::any::TypeId;
 use bevy_ecs::prelude::Resource;
 
 use crate::render::mesh::Vertex;
+use crate::render::texture;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct PipelineId {
@@ -139,7 +140,13 @@ impl<'a> PipelineBuilder<'a> {
                 unclipped_depth: false,
                 conservative: false
             },
-            depth_stencil: None,
+            depth_stencil: Some(wgpu::DepthStencilState { 
+                format: texture::Texture::DEPTH_FORMAT, 
+                depth_write_enabled: Some(true), 
+                depth_compare: Some(wgpu::CompareFunction::Greater), 
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
             multisample: wgpu::MultisampleState {
                 count: 1,
                 mask: !0,

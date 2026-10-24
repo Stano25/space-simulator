@@ -1,7 +1,7 @@
 use std::f32::consts::FRAC_PI_2;
 
 use glam::{Mat4, Vec3};
-use glam::camera::rh::{view::look_at_mat4, proj::directx::perspective};
+use glam::camera::rh::view::look_at_mat4;
 
 use bevy_ecs::prelude::*;
 
@@ -63,7 +63,25 @@ impl Projection {
     }
 
     pub fn calc_matrix(&self) -> Mat4 {
-        perspective(self.fovy, self.aspect, self.znear, self.zfar)
+        let f = 1.0 / (self.fovy * 0.5).tan();
+        let depth_range = self.zfar - self.znear;
+
+        Mat4::from_cols(
+            glam::Vec4::new(f / self.aspect, 0.0, 0.0, 0.0),
+            glam::Vec4::new(0.0, f, 0.0, 0.0),
+            glam::Vec4::new(
+                0.0,
+                0.0,
+                self.znear / depth_range,
+                -1.0,
+            ),
+            glam::Vec4::new(
+                0.0,
+                0.0,
+                self.znear * self.zfar / depth_range,
+                0.0,
+            ),
+        )
     }
 }
 

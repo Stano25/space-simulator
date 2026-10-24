@@ -2,6 +2,8 @@ use std::sync::Arc;
 
 use winit::window::Window;
 
+use crate::render::texture::Texture;
+
 use bevy_ecs::prelude::Resource;
 
 #[derive(Debug, Clone)]
@@ -32,6 +34,7 @@ pub struct RenderContext {
     pub size: (u32, u32),
     #[expect(dead_code)]
     window: Arc<Window>,
+    pub depth_texture: Texture,
 }
 
 impl RenderContext {
@@ -86,6 +89,8 @@ impl RenderContext {
         };
         surface.configure(&device, &surface_configuration);
 
+        let depth_texture = Texture::create_depth_texture(&device, &surface_configuration, "Depth Texture");
+
         Self {
             instance: instance,
             surface: surface,
@@ -94,6 +99,7 @@ impl RenderContext {
             config: surface_configuration,
             size: (size.width, size.height),
             window: window,
+            depth_texture: depth_texture,
         }
     }
 
@@ -102,6 +108,8 @@ impl RenderContext {
             self.size = (new_width, new_height);
             self.config.width = new_width;
             self.config.height = new_height;
+            self.depth_texture = Texture::create_depth_texture(&self.device, &self.config, "Depth Texture");
+
             self.update_surface();
         }
     }

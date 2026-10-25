@@ -1,34 +1,38 @@
 @group(0) @binding(0)
 var output_cubemap: texture_storage_2d_array<rgba8unorm, write>;
 
-// ---------------------------------------------------------------------------
-// 1. Cubemap Face to 3D Direction Vector
-// ---------------------------------------------------------------------------
+// Cubemap Face to 3D Direction Vector
 fn pixel_to_dir(coord: vec2<f32>, face: u32, size: f32) -> vec3<f32> {
-    let uv = (coord / size) * 2.0 - 1.0;
+    let face_coords = (coord / size) * 2.0 - 1.0;
     var v = vec3<f32>(0.0);
     switch (face) {
-        case 0u: { v = vec3<f32>( 1.0, -uv.y, -uv.x); } // +X
-        case 1u: { v = vec3<f32>(-1.0, -uv.y,  uv.x); } // -X
-        case 2u: { v = vec3<f32>( uv.x,  1.0,  uv.y); } // +Y
-        case 3u: { v = vec3<f32>( uv.x, -1.0, -uv.y); } // -Y
-        case 4u: { v = vec3<f32>( uv.x, -uv.y,  1.0); } // +Z
-        case 5u: { v = vec3<f32>(-uv.x, -uv.y, -1.0); } // -Z
+        case 0u: { v = vec3<f32>(           1.0, -face_coords.y, -face_coords.x); } // +X
+        case 1u: { v = vec3<f32>(          -1.0, -face_coords.y,  face_coords.x); } // -X
+        case 2u: { v = vec3<f32>( face_coords.x,            1.0,  face_coords.y); } // +Y
+        case 3u: { v = vec3<f32>( face_coords.x,           -1.0, -face_coords.y); } // -Y
+        case 4u: { v = vec3<f32>( face_coords.x, -face_coords.y,            1.0); } // +Z
+        case 5u: { v = vec3<f32>(-face_coords.x, -face_coords.y,           -1.0); } // -Z
         default: { v = vec3<f32>(0.0, 0.0, 1.0); }
     }
     return normalize(v);
 }
 
-// ---------------------------------------------------------------------------
-// 2. Hash & Color Utilities
-// ---------------------------------------------------------------------------
-fn hash13_fast(p: vec3<f32>) -> f32 {
-    var q = fract(p * 0.1031);
-    q += dot(q, q.zyx + 31.32);
-    return fract((q.x + q.y) * q.z);
+// PCG (Permuted Congruential Generator) + LCG (Linear Congruential Generator) from Numerical Recipes
+// this implementation is from the Research paper "Hash Functions for GPU Rendering" (JCGT)
+fn hash_u32_3d(p: vec3<i32>) -> vec3<f32> {
+    // Linear Congruential Generator -> guarantees every number is visited only once
+    var v = vec3<u32>(p) * 1664525u + 1013904223u;
+    v.x += v.y * v.z;
+    v.y += v.z * v.x;
+    v.z += v.x * v.y;
+    v ^= v >> vec3<u32>(16u);
+    v.x += v.y * v.z;
+    v.y += v.z * v.x;
+    v.z += v.x * v.y;
+    return vec3<f32>(v) / 4294967296.0;
 }
-
 fn hash_u32_1d(p: vec3<i32>) -> f32 {
+    // Linear Congruential Generator -> guarantees every number is visited only once
     var v = vec3<u32>(p) * 1664525u + 1013904223u;
     v.x += v.y * v.z;
     v.y += v.z * v.x;
@@ -37,24 +41,73 @@ fn hash_u32_1d(p: vec3<i32>) -> f32 {
     v.x += v.y * v.z;
     v.y += v.z * v.x;
     v.z += v.x * v.y;
+    // avoids possible combination where the same pattern of x,y,z
+    // could produce the same hash for different inputs
     let h = v.x + v.y * 31u + v.z * 137u;
-    return f32(h) * (1.0 / 4294967296.0);
-}
-
-fn hash_star_u32(p: vec3<i32>) -> vec3<f32> {
-    var v = vec3<u32>(p) * 1664525u + 1013904223u;
-    v.x += v.y * v.z;
-    v.y += v.z * v.x;
-    v.z += v.x * v.y;
-    v ^= v >> vec3<u32>(16u);
-    v.x += v.y * v.z;
-    v.y += v.z * v.x;
-    v.z += v.x * v.y;
-    return vec3<f32>(v) * (1.0 / 4294967296.0);
+    return f32(h) / 4294967296.0;
 }
 
 // ---------------------------------------------------------------------------
-// 3. Astrophysical Simulator Model (Mass -> Temp/Luminosity -> Distance/Extinction)
+// 3D Noise & Nebula Math
+// ---------------------------------------------------------------------------
+fn noise3d(p: vec3<f32>) -> f32 {
+    let fl = floor(p);
+    let f = p - fl;
+    // Ken Perlin’s Quintic S-Curve ( 6f^5 − 15f^4 + 10f^3 )
+    let u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+
+    let i0 = vec3<i32>(fl);
+
+    let c000 = hash_u32_1d(i0 + vec3<i32>(0, 0, 0));
+    let c100 = hash_u32_1d(i0 + vec3<i32>(1, 0, 0));
+    let c010 = hash_u32_1d(i0 + vec3<i32>(0, 1, 0));
+    let c110 = hash_u32_1d(i0 + vec3<i32>(1, 1, 0));
+
+    let c001 = hash_u32_1d(i0 + vec3<i32>(0, 0, 1));
+    let c101 = hash_u32_1d(i0 + vec3<i32>(1, 0, 1));
+    let c011 = hash_u32_1d(i0 + vec3<i32>(0, 1, 1));
+    let c111 = hash_u32_1d(i0 + vec3<i32>(1, 1, 1));
+
+    return mix(
+        mix(mix(c000, c100, u.x), mix(c010, c110, u.x), u.y),
+        mix(mix(c001, c101, u.x), mix(c011, c111, u.x), u.y),
+        u.z
+    );
+}
+
+// Fractal Brownian Motion (FBM) for Nebula Density
+fn fbm(p: vec3<f32>) -> f32 {
+    var v = 0.0;
+    var amp = 0.5;
+    var pos = p;
+    for (var i = 0; i < 7; i++) {
+        v += amp * noise3d(pos);
+        pos = pos * 2.02 + vec3<f32>(1.2, 5.8, 3.4);
+        amp *= 0.52;
+    }
+    return v;
+}
+
+const GALACTIC_POLE: vec3<f32> = vec3<f32>(0.35, 0.85, 0.38);
+const GALACTIC_CORE: vec3<f32> = vec3<f32>(0.85, -0.42, 0.31);
+
+struct GalacticCoords {
+    disk_mask: f32,
+    core_mask: f32,
+};
+
+fn get_galactic_coords(dir: vec3<f32>) -> GalacticCoords {
+    let lat = abs(dot(dir, normalize(GALACTIC_POLE)));
+    let disk_mask = exp(-lat * lat * 7.5);
+
+    let core_angle = max(dot(dir, normalize(GALACTIC_CORE)), 0.0);
+    let core_mask = pow(core_angle, 6.0) * exp(-lat * lat * 14.0);
+
+    return GalacticCoords(disk_mask, core_mask);
+}
+
+// ---------------------------------------------------------------------------
+// Astrophysical Simulator Model (Mass -> Temp/Luminosity -> Distance/Extinction)
 // ---------------------------------------------------------------------------
 struct AstroStar {
     color: vec3<f32>,
@@ -118,63 +171,6 @@ fn evaluate_astrophysical_star(
     return out;
 }
 
-// ---------------------------------------------------------------------------
-// 4. Fast 3D Noise & Nebula Math
-// ---------------------------------------------------------------------------
-fn noise3d(p: vec3<f32>) -> f32 {
-    let fl = floor(p);
-    let f = p - fl;
-    let u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
-
-    let i0 = vec3<i32>(fl);
-
-    let c000 = hash_u32_1d(i0 + vec3<i32>(0, 0, 0));
-    let c100 = hash_u32_1d(i0 + vec3<i32>(1, 0, 0));
-    let c010 = hash_u32_1d(i0 + vec3<i32>(0, 1, 0));
-    let c110 = hash_u32_1d(i0 + vec3<i32>(1, 1, 0));
-
-    let c001 = hash_u32_1d(i0 + vec3<i32>(0, 0, 1));
-    let c101 = hash_u32_1d(i0 + vec3<i32>(1, 0, 1));
-    let c011 = hash_u32_1d(i0 + vec3<i32>(0, 1, 1));
-    let c111 = hash_u32_1d(i0 + vec3<i32>(1, 1, 1));
-
-    return mix(
-        mix(mix(c000, c100, u.x), mix(c010, c110, u.x), u.y),
-        mix(mix(c001, c101, u.x), mix(c011, c111, u.x), u.y),
-        u.z
-    );
-}
-
-fn fbm(p: vec3<f32>) -> f32 {
-    var v = 0.0;
-    var amp = 0.5;
-    var pos = p;
-    for (var i = 0; i < 6; i++) {
-        v += amp * noise3d(pos);
-        pos = pos * 2.02 + vec3<f32>(1.2, 5.8, 3.4);
-        amp *= 0.52;
-    }
-    return v;
-}
-
-const GALACTIC_POLE: vec3<f32> = vec3<f32>(0.35, 0.85, 0.38);
-const GALACTIC_CORE: vec3<f32> = vec3<f32>(0.85, -0.42, 0.31);
-
-struct GalacticCoords {
-    disk_mask: f32,
-    core_mask: f32,
-};
-
-fn get_galactic_coords(dir: vec3<f32>) -> GalacticCoords {
-    let lat = abs(dot(dir, normalize(GALACTIC_POLE)));
-    let disk_mask = exp(-lat * lat * 7.5);
-
-    let core_angle = max(dot(dir, normalize(GALACTIC_CORE)), 0.0);
-    let core_mask = pow(core_angle, 6.0) * exp(-lat * lat * 14.0);
-
-    return GalacticCoords(disk_mask, core_mask);
-}
-
 fn render_milky_way(dir: vec3<f32>, gal: GalacticCoords) -> vec3<f32> {
     if (gal.disk_mask < 0.001) {
         return vec3<f32>(0.0);
@@ -217,7 +213,7 @@ fn render_milky_way(dir: vec3<f32>, gal: GalacticCoords) -> vec3<f32> {
 }
 
 // ---------------------------------------------------------------------------
-// 5. Procedural Star Layer (Supports Astrophysical Physics for Layer 2)
+// Procedural Star Layer (Supports Astrophysical Physics for Layer 2)
 // ---------------------------------------------------------------------------
 const SHELL_HALF: f32 = 0.5;
 const JITTER: f32 = 0.7;
@@ -247,12 +243,12 @@ fn render_procedural_star_layer(
             for (var x = -1; x <= 1; x++) {
                 let cell = base_cell + vec3<i32>(x, y, z);
 
-                let rnd = hash_star_u32(cell + layer_seed);
+                let rnd = hash_u32_3d(cell + layer_seed);
                 if (rnd.x < threshold) {
                     continue;
                 }
 
-                let jit = hash_star_u32(cell + layer_seed + vec3<i32>(413, 137, 291));
+                let jit = hash_u32_3d(cell + layer_seed + vec3<i32>(413, 137, 291));
                 let star_pos = vec3<f32>(cell) + 0.5 + (jit - 0.5) * JITTER;
 
                 let r = length(star_pos);
@@ -329,6 +325,7 @@ fn render_hero_stars_analytical(dir: vec3<f32>, cubemap_size: f32, gal_disk: f32
 @compute @workgroup_size(16, 16, 1)
 fn cs_main(@builtin(global_invocation_id) id: vec3<u32>) {
     let size = f32(textureDimensions(output_cubemap).x);
+    // redundant in this case, but its a good safety check because GPUs execute threads in groups of 16x16
     if (id.x >= u32(size) || id.y >= u32(size)) {
         return;
     }
@@ -375,8 +372,12 @@ fn cs_main(@builtin(global_invocation_id) id: vec3<u32>) {
     final_color += render_hero_stars_analytical(dir, size, gal.disk_mask);
 
     // 5. Anti-Banding Dither (TPDF)
-    let dither = (hash13_fast(vec3<f32>(f32(id.x), f32(id.y), f32(id.z) * 19.1)) - 0.5) * (1.5 / 255.0);
+    let rnd_dither = hash_u32_3d(vec3<i32>(id));
+    let dither = (rnd_dither.x - rnd_dither.y) * (1.0 / 255.0);
     final_color += vec3<f32>(dither);
+    // if dir.x == 0.0 {
+    //     final_color = vec3<f32>(1.0, 0.0, 0.0);
+    // }
 
     // Write directly into the cubemap face!
     textureStore(output_cubemap, id.xy, id.z, vec4<f32>(final_color, 1.0));

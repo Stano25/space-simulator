@@ -1,7 +1,7 @@
 use bevy_ecs::prelude::*;
 
 use engine::render::{
-    camera::GpuCamera,
+    camera::{GpuCamera, Camera},
     context::RenderContext,
     instance::{InstanceManager, InstanceRaw, Transform, BatchGroup, DrawBatch},
     layout::{EngineLayout, LayoutRegistry},
@@ -21,10 +21,11 @@ pub fn sandbox_render_system(
     mut render_context: ResMut<RenderContext>,
     pipeline_registry: Res<PipelineRegistry>,
     query: Query<(&Mesh, &Material, &Transform)>,
-    camera: Res<GpuCamera>,
+    camera_gpu: Res<GpuCamera>,
     mut instance_manager: ResMut<InstanceManager>,
     layouts: Res<LayoutRegistry>,
     skybox: Option<Res<GpuSkybox>>,
+    camera_query: Query<&Camera>,
 ) {
     let current_surface_texture = render_context.surface.get_current_texture();
     let drawable = match current_surface_texture {
@@ -41,6 +42,10 @@ pub fn sandbox_render_system(
 
     let mut groups: HashMap<BatchKey, BatchGroup> = HashMap::new();
 
+    let Some(camera) = camera_query.iter().next() else {
+        return;
+    };
+
     for (mesh, material, transform) in query.iter() {
         let key = (Arc::as_ptr(&mesh.gpu_mesh), Arc::as_ptr(&material.gpu_material));
         let batch_group = groups.entry(key).or_insert_with(|| BatchGroup {
@@ -49,7 +54,7 @@ pub fn sandbox_render_system(
             instances: Vec::new(),
         });
 
-        let instance_raw = InstanceRaw::from_transform(transform);
+        let instance_raw = InstanceRaw::from_transform(transform, camera.position);
         batch_group.instances.push(instance_raw);
     }
 
@@ -129,7 +134,7 @@ pub fn sandbox_render_system(
         if let Some(default_pipeline) = pipeline_registry.try_get(EnginePipeline::Default) {
             render_pass.set_pipeline(default_pipeline);
 
-            render_pass.set_bind_group(1, &camera.bind_group, &[]);
+            render_pass.set_bind_group(1, &camera_gpu.bind_group, &[]);
             render_pass.set_bind_group(2, &instance_manager.bind_group, &[]);
 
             for batch in batches {

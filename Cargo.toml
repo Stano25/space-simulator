@@ -11,5 +11,14 @@ bevy_ecs = "0.19.1"
 wgpu = "30.0.1"
 pollster = "1.0.1"
 bytemuck = "1.25.2"
-image = { version = "0.25.10", features = ["png", "jpeg"] }
+image = { version = "0.25.10", default-features = false, features = ["png"] }
 glam = "0.33.11"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+debug = 0
+panic = "abort"
+incremental = false

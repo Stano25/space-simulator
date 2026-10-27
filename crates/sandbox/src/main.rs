@@ -69,7 +69,7 @@ fn main() {
 
 fn test(mut commands: Commands, render_context: Res<RenderContext>, gpu_layout: Res<LayoutRegistry>) {
     let camera = Camera::from_direction(
-        glam::Vec3::new(0.0, 0.0, 2.0),
+        glam::DVec3::new(0.0, 0.0, 2.0),
         glam::Vec3::new(0.0, 0.0, -1.0)
     );
 
@@ -78,19 +78,19 @@ fn test(mut commands: Commands, render_context: Res<RenderContext>, gpu_layout: 
     let mesh2 = Mesh::new(&render_context.device, VERTICES2, INDICES2);
 
     let transform = Transform {
-        position: glam::Vec3::new(0.0, 0.0, 0.0),
+        position: glam::DVec3::new(0.0, 0.0, 0.0),
         rotation: glam::Quat::IDENTITY,
         scale: glam::Vec3::new(1.0, 1.0, 1.0),
     };
 
     let transform2 = Transform {
-        position: glam::Vec3::new(2.0, 0.0, 0.0),
+        position: glam::DVec3::new(2.0, 0.0, 0.0),
         rotation: glam::Quat::IDENTITY,
         scale: glam::Vec3::new(1.0, 1.0, 1.0),
     };
 
     let transform3 = Transform {
-        position: glam::Vec3::new(0.0, -10.0, -5.0),
+        position: glam::DVec3::new(0.0, -10.0, -5.0),
         rotation: glam::Quat::IDENTITY,
         scale: glam::Vec3::new(10.0, 10.0, 10.0),
     };
@@ -110,16 +110,21 @@ fn test(mut commands: Commands, render_context: Res<RenderContext>, gpu_layout: 
 }
 
 fn camera_system(mut query: Query<&mut Camera>, render_context: Res<RenderContext>, camera_gpu: Res<GpuCamera>, input: Res<InputState>, time: Res<Time>, projection: Res<Projection>) {
-    let speed: f32 = 4.0;
+    let speed: f64 = 4.0;
     let sensitivity: f32 = 0.2;
-    let delta_time = time.delta_time();
+    let delta_time = time.delta_time() as f64;
+    let delta_time_f32 = time.delta_time() as f32;
 
     for mut camera in query.iter_mut() {
         let mut camera_uniform = CameraUniform::new();
 
         let (yaw_sin, yaw_cos) = camera.yaw.sin_cos();
-        let forward = glam::Vec3::new(yaw_cos, 0.0, yaw_sin).normalize();
-        let right = glam::Vec3::new(-yaw_sin, 0.0, yaw_cos).normalize();
+
+        let yaw_sin = yaw_sin as f64;
+        let yaw_cos = yaw_cos as f64;
+
+        let forward = glam::DVec3::new(yaw_cos, 0.0, yaw_sin).normalize();
+        let right = glam::DVec3::new(-yaw_sin, 0.0, yaw_cos).normalize();
 
         if input.is_key_pressed(KeyCode::KeyW) {
             camera.position += forward * speed * delta_time;
@@ -135,19 +140,23 @@ fn camera_system(mut query: Query<&mut Camera>, render_context: Res<RenderContex
         }
 
         let (pitch_sin, pitch_cos) = camera.pitch.sin_cos();
-        let scrollward = glam::Vec3::new(pitch_cos * yaw_cos, pitch_sin, pitch_cos * yaw_sin).normalize();
-        camera.position += scrollward * input.get_scroll_delta().y * speed * sensitivity * delta_time;
+
+        let pitch_sin = pitch_sin as f64;
+        let pitch_cos = pitch_cos as f64;
+
+        let scrollward = glam::DVec3::new(pitch_cos * yaw_cos, pitch_sin, pitch_cos * yaw_sin).normalize();
+        camera.position += scrollward * input.get_scroll_delta().y as f64 * speed * sensitivity as f64 * delta_time;
 
         if input.is_key_pressed(KeyCode::Space){
-            camera.position += glam::Vec3::Y * speed * delta_time;
+            camera.position += glam::DVec3::Y * speed * delta_time;
         }
         if input.is_key_pressed(KeyCode::ShiftLeft){
-            camera.position -= glam::Vec3::Y * speed * delta_time;
+            camera.position -= glam::DVec3::Y * speed * delta_time;
         }
 
         if input.is_button_pressed(winit::event::MouseButton::Left) {
-            camera.yaw += input.get_mouse_delta().x * sensitivity * delta_time;
-            camera.pitch -= input.get_mouse_delta().y * sensitivity * delta_time;
+            camera.yaw += input.get_mouse_delta().x * sensitivity * delta_time_f32;
+            camera.pitch -= input.get_mouse_delta().y * sensitivity * delta_time_f32;
         }
 
         camera.pitch = camera.pitch.clamp(-SAFE_FRAC_PI_2, SAFE_FRAC_PI_2);

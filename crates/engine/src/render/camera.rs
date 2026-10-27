@@ -1,6 +1,6 @@
 use std::f32::consts::FRAC_PI_2;
 
-use glam::{Mat4, Vec3};
+use glam::{Mat4, Vec3, DVec3};
 use glam::camera::rh::view::look_at_mat4;
 
 use bevy_ecs::prelude::*;
@@ -11,17 +11,17 @@ pub const SAFE_FRAC_PI_2: f32 = FRAC_PI_2 - 0.0001;
 
 #[derive(Component)]
 pub struct Camera {
-    pub position: Vec3,
+    pub position: DVec3,
     pub yaw: f32,
     pub pitch: f32,
 }
 
 impl Camera {
-    pub fn new(position: Vec3, yaw: f32, pitch: f32) -> Self {
+    pub fn new(position: DVec3, yaw: f32, pitch: f32) -> Self {
         Self { position, yaw, pitch }
     }
 
-    pub fn from_direction(position: Vec3, direction: Vec3) -> Self {
+    pub fn from_direction(position: DVec3, direction: Vec3) -> Self {
         let dir = direction.normalize();
 
         let pitch = dir.y.clamp(-1.0, 1.0).asin();
@@ -41,7 +41,7 @@ impl Camera {
             pitch_cos * yaw_sin,
         ).normalize();
 
-        look_at_mat4(self.position, self.position + forward, Vec3::Y)
+        look_at_mat4(Vec3::ZERO, forward, Vec3::Y)
     }
 }
 

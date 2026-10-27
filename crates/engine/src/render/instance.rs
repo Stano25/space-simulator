@@ -1,5 +1,5 @@
 use bevy_ecs::prelude::*;
-use glam::{Vec3, Quat};
+use glam::{DVec3, Quat, Vec3};
 use std::sync::Arc;
 use crate::render::{material::GpuMaterial, mesh::GpuMesh};
 
@@ -11,11 +11,15 @@ pub struct InstanceRaw {
 }
 
 impl InstanceRaw {
-    pub fn from_transform(transform: &Transform) -> Self {
+    pub fn from_transform(transform: &Transform, camera_pos: DVec3) -> Self {
+        let relative_pos_f64: DVec3 = transform.position - camera_pos;
+
+        let relative_pos_f32: Vec3 = relative_pos_f64.as_vec3();
+
         let model_matrix = glam::Mat4::from_scale_rotation_translation(
             transform.scale,
             transform.rotation,
-            transform.position,
+            relative_pos_f32,
         );
         Self {
             model_matrix: model_matrix.to_cols_array_2d(),
@@ -25,7 +29,7 @@ impl InstanceRaw {
 
 #[derive(Component, Debug, Clone)]
 pub struct Transform {
-    pub position: Vec3,
+    pub position: DVec3,
     pub rotation: Quat,
     pub scale: Vec3,
 }

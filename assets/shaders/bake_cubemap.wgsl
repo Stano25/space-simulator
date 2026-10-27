@@ -107,75 +107,9 @@ fn get_galactic_coords(dir: vec3<f32>) -> GalacticCoords {
 }
 
 // ---------------------------------------------------------------------------
-// Astrophysical Simulator Model (Mass -> Temp/Luminosity -> Distance/Extinction)
+// Milky Way Nebula Layer (FBM + Dust Absorption + Color Grading)
 // ---------------------------------------------------------------------------
-struct AstroStar {
-    color: vec3<f32>,
-    core_sharpness: f32,
-    halo_size: f32,
-    brightness: f32,
-};
-
-fn evaluate_astrophysical_star(
-    u_mass: f32,       // Random float [0, 1]
-    u_dist: f32,       // Random float [0, 1]
-    gal_disk: f32,     // Galactic disk mask (denser dust in Milky Way)
-    is_hero: bool
-) -> AstroStar {
-    // 1. Initial Mass Function (Salpeter power law: dwarfs are common, giants are rare)
-    let mass = 0.15 * pow(max(1.0 - u_mass * 0.995, 0.001), -0.85);
-
-    // 2. Main Sequence Temperature (K) & Intrinsic Luminosity (L_sun)
-    let temp = 5780.0 * sqrt(mass);
-    let luminosity = pow(mass, 3.5);
-
-    // 3. Distance distribution (volume-weighted)
-    let dist_range = select(vec2<f32>(25.0, 350.0), vec2<f32>(10.0, 120.0), is_hero);
-    let dist = mix(dist_range.x, dist_range.y, pow(u_dist, 0.40));
-
-    // 4. Flux reaching camera (Inverse-square law)
-    let flux = luminosity / (dist * dist);
-
-    // 5. Interstellar Reddening (Extinction)
-    // Blue light attenuates ~5x faster than red light through galactic dust
-    let dust_tau = (dist / dist_range.y) * (0.05 + gal_disk * 0.90);
-    let extinction = exp(-vec3<f32>(0.35, 0.85, 1.80) * dust_tau);
-
-    // 6. Color from Temperature (Blackbody curve)
-    var base_col = vec3<f32>(1.0);
-    if (temp < 3600.0) {
-        base_col = vec3<f32>(1.00, 0.38, 0.15); // Deep Red (Class M)
-    } else if (temp < 5200.0) {
-        base_col = vec3<f32>(1.00, 0.65, 0.25); // Flame Orange (Class K)
-    } else if (temp < 6800.0) {
-        base_col = vec3<f32>(1.00, 0.92, 0.75); // Warm Yellow/Sun (Class G)
-    } else if (temp < 9800.0) {
-        base_col = vec3<f32>(0.92, 0.96, 1.00); // Diamond White (Class A/F)
-    } else {
-        base_col = vec3<f32>(0.50, 0.72, 1.00); // Saturated Blue Giant (Class O/B)
-    }
-
-    // Shift color according to dust extinction
-    let final_color = base_col * extinction;
-
-    // 7. Apparent Size & Brightness (Logarithmic Optical Point Spread Function)
-    // Brighter flux = wider perceived core & halo
-    let log_flux = clamp(log(1.0 + flux * 12.0), 0.35, 3.5);
-
-    var out: AstroStar;
-    out.color = final_color;
-    out.core_sharpness = select(240.0 / log_flux, 0.085 / log_flux, is_hero);
-    out.halo_size = select(42.0 / log_flux, 0.28 / log_flux, is_hero);
-    out.brightness = select(clamp(log_flux * 0.65, 0.75, 1.70), clamp(log_flux * 1.25, 2.5, 4.2), is_hero);
-
-    return out;
-}
-
-fn render_milky_way(dir: vec3<f32>, gal: GalacticCoords) -> vec3<f32> {
-    if (gal.disk_mask < 0.001) {
-        return vec3<f32>(0.0);
-    }
-
+fn render_nebula(dir: vec3<f32>, gal: GalacticCoords) -> vec3<f32> {
     let p = dir * 2.8;
 
     let warp = vec3<f32>(
@@ -213,22 +147,83 @@ fn render_milky_way(dir: vec3<f32>, gal: GalacticCoords) -> vec3<f32> {
 }
 
 // ---------------------------------------------------------------------------
-// Procedural Star Layer (Supports Astrophysical Physics for Layer 2)
+// Astrophysical Simulator Model (Mass -> Temp/Luminosity -> Distance/Extinction)
 // ---------------------------------------------------------------------------
-const SHELL_HALF: f32 = 0.5;
-const JITTER: f32 = 0.7;
+struct AstroStar {
+    color: vec3<f32>,
+    core_sharpness: f32,
+    halo_size: f32,
+    brightness: f32,
+};
 
-fn render_procedural_star_layer(
+fn evaluate_astrophysical_star(
+    u_mass: f32,       // Random float [0, 1]
+    u_dist: f32,       // Random float [0, 1]
+    gal_disk: f32,     // Galactic disk mask (denser dust in Milky Way)
+    is_hero: bool
+) -> AstroStar {
+    // 1. Initial Mass Function (Salpeter power law: dwarfs are common, giants are rare)
+    let mass = 0.15 * pow(max(1.0 - u_mass * 0.995, 0.001), -0.85);
+
+    // 2. Main Sequence Temperature (K)
+    let temp = 5780.0 * sqrt(mass);
+
+    // 3. Distance distribution in parsecs (volume-weighted)
+    let dist_range = select(vec2<f32>(20.0, 380.0), vec2<f32>(8.0, 140.0), is_hero);
+    let dist = mix(dist_range.x, dist_range.y, pow(u_dist, 0.40));
+
+    // 4. Flux reaching camera (Inverse-square law)
+    // we perceive brightness logarithmically (magnitude scale)
+    let log2_flux = 3.5 * log2(mass) - 2.0 * log2(dist);
+
+    // 5. Interstellar Reddening (Extinction)
+    // Blue light attenuates ~5x faster than red light through galactic dust
+    let dust_tau = (dist / dist_range.y) * (0.05 + gal_disk * 0.90);
+    let extinction = exp(-vec3<f32>(0.35, 0.85, 1.80) * dust_tau);
+
+    // 6. Color from Temperature (Blackbody curve)
+    var base_col = vec3<f32>(1.0);
+    if (temp < 3600.0) {
+        base_col = vec3<f32>(1.00, 0.38, 0.15); // Deep Red (Class M)
+    } else if (temp < 5200.0) {
+        base_col = vec3<f32>(1.00, 0.65, 0.25); // Flame Orange (Class K)
+    } else if (temp < 6800.0) {
+        base_col = vec3<f32>(1.00, 0.92, 0.75); // Warm Yellow/Sun (Class G)
+    } else if (temp < 9800.0) {
+        base_col = vec3<f32>(0.92, 0.96, 1.00); // Diamond White (Class A/F)
+    } else {
+        base_col = vec3<f32>(0.50, 0.72, 1.00); // Saturated Blue Giant (Class O/B)
+    }
+
+    // Shift color according to dust extinction
+    let final_color = base_col * extinction;
+
+    // 7. Continuous Optical Mapping
+    let min_log = select(-20.0, -13.0, is_hero); // Faintest visible star
+    let max_log = select(-4.0,   2.5,  is_hero); // Brightest landmark star
+    let t = clamp((log2_flux - min_log) / (max_log - min_log), 0.0, 1.0);
+
+    var out: AstroStar;
+    out.color = final_color;
+
+    // Continuous size & brightness scaling:
+    out.core_sharpness = select(mix(450.0, 120.0, t), mix(0.18, 0.045, t), is_hero);
+    out.halo_size      = select(mix(60.0,  24.0,  t), mix(0.40, 0.16,  t), is_hero);
+    out.brightness     = select(mix(0.65,  1.75,  t), mix(2.20, 4.40,  t), is_hero);
+
+    return out;
+}
+
+// ---------------------------------------------------------------------------
+// Procedural Star Layer with suport for Astrophysical Model
+// ---------------------------------------------------------------------------
+fn render_star_layer(
     dir: vec3<f32>,
     scale: f32,
     base_threshold: f32,
-    brightness: f32,
-    core_sharpness: f32,
-    halo_size: f32,
     halo_strength: f32,
     white_core_mix: f32,
     density_boost: f32,
-    is_astrophysical: bool, // true = evaluates Mass, Distance & Extinction!
     gal_disk: f32
 ) -> vec3<f32> {
     let base_cell = vec3<i32>(floor(dir * scale));
@@ -249,34 +244,23 @@ fn render_procedural_star_layer(
                 }
 
                 let jit = hash_u32_3d(cell + layer_seed + vec3<i32>(413, 137, 291));
-                let star_pos = vec3<f32>(cell) + 0.5 + (jit - 0.5) * JITTER;
+                let star_pos = vec3<f32>(cell) + 0.5 + (jit - 0.5) * 0.7;
 
                 let r = length(star_pos);
-                if (abs(r - scale) > SHELL_HALF) {
+                if (abs(r - scale) > 0.5) {
                     continue;
                 }
 
                 let star_dir = star_pos / r;
                 let d = length(dir - star_dir) * scale;
 
-                if (is_astrophysical) {
-                    // LAYER 2: Physical Main Sequence Model
-                    let astro = evaluate_astrophysical_star(jit.y, jit.z, gal_disk, false);
-                    let core = exp(-d * d * astro.core_sharpness);
-                    let halo = exp(-d * astro.halo_size) * halo_strength;
+                // Physical Main Sequence Model
+                let astro = evaluate_astrophysical_star(jit.y, jit.z, gal_disk, false);
+                let core = exp(-d * d * astro.core_sharpness);
+                let halo = exp(-d * astro.halo_size) * halo_strength;
 
-                    let core_color = mix(astro.color, vec3<f32>(1.0, 1.0, 1.0), core * white_core_mix);
-                    star_accum += (core_color * core + astro.color * halo) * astro.brightness;
-                } else {
-                    // LAYER 1: Fast Microscopic Stardust
-                    let core = exp(-d * d * core_sharpness);
-                    let halo = exp(-d * halo_size) * halo_strength;
-
-                    // Neutral stardust tint
-                    let base_color = mix(vec3<f32>(0.90, 0.95, 1.0), vec3<f32>(1.0, 0.85, 0.65), jit.y);
-                    let core_color = mix(base_color, vec3<f32>(1.0, 1.0, 1.0), core * white_core_mix);
-                    star_accum += (core_color * core + base_color * halo) * brightness;
-                }
+                let core_color = mix(astro.color, vec3<f32>(1.0, 1.0, 1.0), core * white_core_mix);
+                star_accum += (core_color * core + astro.color * halo) * astro.brightness;
             }
         }
     }
@@ -285,43 +269,37 @@ fn render_procedural_star_layer(
 }
 
 // ---------------------------------------------------------------------------
-// 6. Analytical Fibonacci Hero Stars (Astrophysical Model on 16 Landmarks)
+// Analytical Fibonacci Hero Stars (Astrophysical Model on 16 Landmarks)
 // ---------------------------------------------------------------------------
-fn render_hero_stars_analytical(dir: vec3<f32>, cubemap_size: f32, gal_disk: f32) -> vec3<f32> {
+fn render_hero_stars(dir: vec3<f32>, cubemap_size: f32, gal_disk: f32) -> vec3<f32> {
     var hero_accum = vec3<f32>(0.0);
     let pixels_per_radian = cubemap_size * (2.0 / 3.14159265);
 
     for (var i = 0u; i < 16u; i++) {
         let y = 1.0 - (f32(i) / 15.0) * 2.0;
-        let radius_at_y = sqrt(max(1.0 - y * y, 0.0));
+        let radius_at_y = sqrt(1.0 - y * y);
         let theta = f32(i) * 2.3999632;
 
         let star_pos = vec3<f32>(cos(theta) * radius_at_y, y, sin(theta) * radius_at_y);
         let cos_dist = dot(dir, star_pos);
 
-        if (cos_dist > 0.998) {
-            let angle = acos(clamp(cos_dist, -1.0, 1.0));
-            let d_px = angle * pixels_per_radian;
+        let angle = acos(clamp(cos_dist, -1.0, 1.0));
+        let d_px = angle * pixels_per_radian;
 
-            // LAYER 3: Physical Model on Hero Stars
-            let u_mass = fract(f32(i) * 0.618033 + 0.1);
-            let u_dist = fract(f32(i) * 0.324718 + 0.5);
-            let astro = evaluate_astrophysical_star(u_mass, u_dist, gal_disk, true);
+        let u_mass = fract(f32(i) * 0.618033 + 0.1);
+        let u_dist = fract(f32(i) * 0.324718 + 0.5);
+        let astro = evaluate_astrophysical_star(u_mass, u_dist, gal_disk, true);
 
-            let core = exp(-d_px * d_px * astro.core_sharpness);
-            let halo = exp(-d_px * astro.halo_size) * 0.28;
+        let core = exp(-d_px * d_px * astro.core_sharpness);
+        let halo = exp(-d_px * astro.halo_size) * 0.28;
 
-            let core_color = mix(astro.color, vec3<f32>(1.0, 1.0, 1.0), core * 0.65);
-            hero_accum += (core_color * core + astro.color * halo) * astro.brightness;
-        }
+        let core_color = mix(astro.color, vec3<f32>(1.0, 1.0, 1.0), core * 0.65);
+        hero_accum += (core_color * core + astro.color * halo) * astro.brightness;
     }
 
     return hero_accum;
 }
 
-// ---------------------------------------------------------------------------
-// Compute Entry Point (Runs ONCE at launch)
-// ---------------------------------------------------------------------------
 @compute @workgroup_size(16, 16, 1)
 fn cs_main(@builtin(global_invocation_id) id: vec3<u32>) {
     let size = f32(textureDimensions(output_cubemap).x);
@@ -331,54 +309,43 @@ fn cs_main(@builtin(global_invocation_id) id: vec3<u32>) {
     }
 
     let dir = pixel_to_dir(vec2<f32>(f32(id.x) + 0.5, f32(id.y) + 0.5), id.z, size);
+    let gal = get_galactic_coords(dir);
 
     var final_color = vec3<f32>(0.0);
 
-    // 1. Nebula / Milky Way
-    let gal = get_galactic_coords(dir);
-    final_color += render_milky_way(dir, gal);
+    // Nebula / Galaxy
+    final_color += render_nebula(dir, gal);
 
-    // 2. LAYER 1: Microscopic Stardust Carpet (Fast, dense background field)
-    final_color += render_procedural_star_layer(
+    // LAYER 1: Microscopic Stardust
+    final_color += render_star_layer(
         dir,
-        210.0,              // scale
-        0.815,              // threshold
-        0.70,               // brightness
-        380.0,              // core sharpness (needle pinpricks!)
-        50.0,               // halo size
-        0.0,                // no halo
-        0.10,               // 90% saturated
-        gal.disk_mask * 0.04,
-        false,              // is_astrophysical = false (fast micro dust)
+        210.0,                // scale: high frequency for tiny ~1px needle pinpricks
+        0.815,                // base_threshold: spawns in ~18.5% of cells
+        0.0,                  // halo_strength: no halo
+        0.10,                 // white_core_mix: 90% saturated color
+        gal.disk_mask * 0.04, // density_boost
         gal.disk_mask
     );
 
-    // 3. LAYER 2: Medium Visible Stars (Astrophysical Model: Mass, Distance & Extinction!)
-    final_color += render_procedural_star_layer(
+    // LAYER 2: Medium Visible Stars
+    final_color += render_star_layer(
         dir,
-        75.0,               // scale
-        0.950,              // threshold
-        1.35,               // brightness
-        220.0,              // base core sharpness
-        38.0,               // base halo size
-        0.05,               // subtle halo
-        0.30,               // white core mix
-        0.0,                // density boost
-        true,               // is_astrophysical = true!
+        75.0,         // scale: medium frequency for clearly visible ~2-3px discs
+        0.950,        // base_threshold: selective 5% spawn rate
+        0.05,         // halo_strength: subtle 5% lens bloom
+        0.30,         // white_core_mix: 30% white-hot center
+        0.0,          // density_boost: 0.0 to keep constellation stars uniformly distributed
         gal.disk_mask
     );
 
-    // 4. LAYER 3: Hero Landmark Beacons (Astrophysical Model on 16 Landmarks!)
-    final_color += render_hero_stars_analytical(dir, size, gal.disk_mask);
+    // LAYER 3: Hero Landmark Beacons
+    final_color += render_hero_stars(dir, size, gal.disk_mask);
 
-    // 5. Anti-Banding Dither (TPDF)
+    // Anti-Banding Dither (TPDF)
     let rnd_dither = hash_u32_3d(vec3<i32>(id));
     let dither = (rnd_dither.x - rnd_dither.y) * (1.0 / 255.0);
     final_color += vec3<f32>(dither);
-    // if dir.x == 0.0 {
-    //     final_color = vec3<f32>(1.0, 0.0, 0.0);
-    // }
 
-    // Write directly into the cubemap face!
+    // Write into the cubemap face
     textureStore(output_cubemap, id.xy, id.z, vec4<f32>(final_color, 1.0));
 }

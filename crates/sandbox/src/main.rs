@@ -1,48 +1,19 @@
-use std::sync::Arc;
-
 use engine::app::app::App;
 use engine::render::camera::{Camera};
 use engine::window::window::WindowConfig;
-use engine::render::{context::{RenderContext, RenderConfig}, mesh::{Mesh, Vertex}};
-use engine::render::material::Material;
-use engine::render::layout::{EngineLayout, LayoutRegistry};
-use engine::render::texture::{Texture};
+use engine::render::{context::{RenderContext, RenderConfig}};
 use engine::render::camera::{GpuCamera, CameraUniform, Projection, SAFE_FRAC_PI_2};
 use engine::input::input::InputState;
 use engine::time::time::Time;
-use engine::render::instance::{Transform};
 
+use sandbox::physics::vverlet::nbody_vverlet_system;
 use sandbox::render::systems::sandbox_render_system;
 use sandbox::render::skybox::{setup_skybox_system, update_skybox_system};
+use sandbox::test_system::test_system;
 
 use bevy_ecs::prelude::*;
 use winit::keyboard::KeyCode;
 
-const VERTICES: &[Vertex] = &[
-    Vertex { position: [-0.0868241, 0.49240386, 0.0], uv: [0.4131759, 0.00759614], }, // A
-    Vertex { position: [-0.49513406, 0.06958647, 0.0], uv: [0.0048659444, 0.43041354], }, // B
-    Vertex { position: [-0.21918549, -0.44939706, 0.0], uv: [0.28081453, 0.949397], }, // C
-    Vertex { position: [0.35966998, -0.3473291, 0.0], uv: [0.85967, 0.84732914], }, // D
-    Vertex { position: [0.44147372, 0.2347359, 0.0], uv: [0.9414737, 0.2652641], }, // E
-];
-
-const VERTICES2: &[Vertex] = &[
-    Vertex { position: [-0.5, 2.0, 0.0], uv: [0.0, 1.0], }, // Bottom-left
-    Vertex { position: [0.5, 2.0, 0.0], uv: [1.0, 1.0], }, // Bottom-right
-    Vertex { position: [0.5, 3.0, 0.0], uv: [1.0, 0.0], }, // Top-right
-    Vertex { position: [-0.5, 3.0, 0.0], uv: [0.0, 0.0], }, // Top-left
-];
-
-const INDICES2: &[u16] = &[
-    3, 0, 1,
-    3, 1, 2,
-];
-
-const INDICES: &[u16] = &[
-    0, 1, 4,
-    1, 2, 4,
-    2, 3, 4,
-];
 
 fn main() {
     App::new()
@@ -57,56 +28,14 @@ fn main() {
         })
 
         // STARTUP (runs once at launch)
-        .add_startup_system((test, setup_skybox_system))
+        .add_startup_system((test_system, setup_skybox_system))
 
         // UPDATE (runs every tick in about_to_wait)
-        .add_system((camera_system, update_skybox_system))
+        .add_system((camera_system, update_skybox_system, nbody_vverlet_system))
 
         // RENDER (runs on WindowEvent::RedrawRequested)
         .set_render_system(sandbox_render_system)
         .run();
-}
-
-fn test(mut commands: Commands, render_context: Res<RenderContext>, gpu_layout: Res<LayoutRegistry>) {
-    let camera = Camera::from_direction(
-        glam::DVec3::new(0.0, 0.0, 2.0),
-        glam::Vec3::new(0.0, 0.0, -1.0)
-    );
-
-    let mesh = Mesh::new(&render_context.device, VERTICES, INDICES);
-
-    let mesh2 = Mesh::new(&render_context.device, VERTICES2, INDICES2);
-
-    let transform = Transform {
-        position: glam::DVec3::new(0.0, 0.0, 0.0),
-        rotation: glam::Quat::IDENTITY,
-        scale: glam::Vec3::new(1.0, 1.0, 1.0),
-    };
-
-    let transform2 = Transform {
-        position: glam::DVec3::new(2.0, 0.0, 0.0),
-        rotation: glam::Quat::IDENTITY,
-        scale: glam::Vec3::new(1.0, 1.0, 1.0),
-    };
-
-    let transform3 = Transform {
-        position: glam::DVec3::new(0.0, -10.0, -5.0),
-        rotation: glam::Quat::IDENTITY,
-        scale: glam::Vec3::new(10.0, 10.0, 10.0),
-    };
-
-    let texture2 = Texture::from_bytes(&render_context.device, &render_context.queue, include_bytes!("../../../assets/textures/roman.png"), "roman.png").unwrap();
-
-    let texture = Texture::from_bytes(&render_context.device, &render_context.queue, include_bytes!("../../../assets/textures/happy-tree.png"), "happy-tree.png").unwrap();
-
-    let material = Material::new(&render_context.device, &gpu_layout.get(EngineLayout::Material), Arc::new(texture));
-
-    let material2 = Material::new(&render_context.device, &gpu_layout.get(EngineLayout::Material), Arc::new(texture2));
-
-    commands.spawn((mesh, material, transform));
-    commands.spawn((mesh2.clone(), material2.clone(), transform2));
-    commands.spawn((mesh2.clone(), material2.clone(), transform3));
-    commands.spawn(camera);
 }
 
 fn camera_system(mut query: Query<&mut Camera>, render_context: Res<RenderContext>, camera_gpu: Res<GpuCamera>, input: Res<InputState>, time: Res<Time>, projection: Res<Projection>) {

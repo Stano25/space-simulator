@@ -78,6 +78,11 @@ impl App {
         self
     }
 
+    pub fn insert_resource<R: Resource>(mut self, resource: R) -> Self {
+        self.world.insert_resource(resource);
+        self
+    }
+
     pub fn run(self) {
         // Create the event loop
         let event_loop = EventLoop::new().expect("Failed to create EventLoop");
@@ -111,7 +116,7 @@ impl App {
             .build(&render_context.device);
 
         {
-            let mut pipeline_registry = self.world.resource_mut::<PipelineRegistry>();  
+            let mut pipeline_registry = self.world.resource_mut::<PipelineRegistry>();
             pipeline_registry.insert(EnginePipeline::Default, default_pipeline);
         }
 

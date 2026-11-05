@@ -58,7 +58,9 @@ impl ApplicationHandler for AppRunner {
                     match event.state {
                         ElementState::Pressed => {
                             input.keyboard.pressed_keys.insert(key_code);
-                            input.keyboard.just_pressed_keys.insert(key_code);
+                            if !event.repeat {
+                                input.keyboard.just_pressed_keys.insert(key_code);
+                            }
                         }
                         ElementState::Released => {
                             input.keyboard.pressed_keys.remove(&key_code);

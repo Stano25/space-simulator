@@ -45,8 +45,8 @@ pub fn test_system(mut commands: Commands, render_context: Res<RenderContext>, g
     // Mass: 600.0 | Distance to Barycenter: 3.2 | Period: ~4.5s
     // ===========================================================================
     let star_a_pos = DVec3::new(3.2, 0.0, 0.0);
-    let star_a_vel = Vec3::new(0.0, 0.0, 4.4721); // Moving +Z
-    let star_a_acc = Vec3::new(-6.25, 0.0, 0.0);  // Initial gravity from Star B (-X)
+    let star_a_vel = DVec3::new(0.0, 0.0, 20.0f64.sqrt()); // Circular: sqrt(mu_bar/a) = sqrt(64/3.2)
+    let star_a_acc = DVec3::new(-6.25, 0.0, 0.0);  // Initial gravity from Star B (-X)
 
     let star_a_orbit = KeplerOrbit {
         parent: None,
@@ -64,8 +64,8 @@ pub fn test_system(mut commands: Commands, render_context: Res<RenderContext>, g
     // Mass: 400.0 | Distance to Barycenter: 4.8 | Period: ~4.5s (180° opposite)
     // ===========================================================================
     let star_b_pos = DVec3::new(-4.8, 0.0, 0.0);
-    let star_b_vel = Vec3::new(0.0, 0.0, -6.7082); // Moving -Z
-    let star_b_acc = Vec3::new(9.375, 0.0, 0.0);   // Initial gravity from Star A (+X)
+    let star_b_vel = DVec3::new(0.0, 0.0, -(45.0f64.sqrt())); // Circular: sqrt(216/4.8) = sqrt(45)
+    let star_b_acc = DVec3::new(9.375, 0.0, 0.0);   // Initial gravity from Star A (+X)
 
     let star_b_orbit = KeplerOrbit {
         parent: None,
@@ -83,8 +83,8 @@ pub fn test_system(mut commands: Commands, render_context: Res<RenderContext>, g
     // Orbits the common barycenter outside both stars | Distance: 24.0 | Period: ~23.3s
     // ===========================================================================
     let planet_pos = DVec3::new(0.0, 0.0, -24.0);
-    let planet_vel = Vec3::new(6.4566, 0.0, 0.0); // Moving +X
-    let planet_acc = Vec3::new(0.0044, 0.0, 1.6693); // Combined pull from both stars (+Z)
+    let planet_vel = DVec3::new((1000.5f64 / 24.0f64).sqrt(), 0.0, 0.0); // Circular: sqrt(1000.5/24)
+    let planet_acc = DVec3::new(0.0044, 0.0, 1.6693); // Combined pull from both stars (+Z)
 
     let planet_orbit = KeplerOrbit {
         parent: None,
@@ -106,7 +106,7 @@ pub fn test_system(mut commands: Commands, render_context: Res<RenderContext>, g
         Transform { position: star_a_pos, rotation: Quat::IDENTITY, scale: Vec3::splat(1.8) },
         Velocity(star_a_vel),
         Acceleration(star_a_acc),
-        CelestialBody { gm: 600.0, softening_sq: 2.25 },
+        CelestialBody { gm: 600.0, softening_sq: 1e-6 },
         star_a_orbit,
         th_mesh.clone(),
         material.clone()
@@ -117,7 +117,7 @@ pub fn test_system(mut commands: Commands, render_context: Res<RenderContext>, g
         Transform { position: star_b_pos, rotation: Quat::IDENTITY, scale: Vec3::splat(1.2) },
         Velocity(star_b_vel),
         Acceleration(star_b_acc),
-        CelestialBody { gm: 400.0, softening_sq: 1.44 },
+        CelestialBody { gm: 400.0, softening_sq: 1e-6 },
         star_b_orbit,
         th_mesh.clone(),
         material.clone()
@@ -128,7 +128,7 @@ pub fn test_system(mut commands: Commands, render_context: Res<RenderContext>, g
         Transform { position: planet_pos, rotation: Quat::IDENTITY, scale: Vec3::splat(0.6) },
         Velocity(planet_vel),
         Acceleration(planet_acc),
-        CelestialBody { gm: 0.5, softening_sq: 0.25 },
+        CelestialBody { gm: 0.5, softening_sq: 1e-6 },
         planet_orbit,
         th_mesh.clone(),
         material.clone()

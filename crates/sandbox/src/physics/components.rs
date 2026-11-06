@@ -1,13 +1,13 @@
 use bevy_ecs::prelude::*;
-use glam::Vec3;
+use glam::DVec3;
 
 pub const RAILS_THRESHOLD: f64 = 10.0;
 
 #[derive(Component)]
-pub struct Velocity(pub Vec3);
+pub struct Velocity(pub DVec3);
 
 #[derive(Component)]
-pub struct Acceleration(pub Vec3);
+pub struct Acceleration(pub DVec3);
 
 #[derive(Component)]
 pub struct CelestialBody {

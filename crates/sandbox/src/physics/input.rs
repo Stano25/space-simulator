@@ -11,19 +11,19 @@ pub fn time_warp_input_system(
     mut warp: ResMut<TimeWarp>,
 ) {
     // '.' -> speed up time
-    if input.is_key_pressed(KeyCode::Period) {
+    if input.is_key_just_pressed(KeyCode::Period) {
         warp.factor = (warp.factor * 1.5).min(100_000.0);
         println!("Time Warp: {:.1}x ({})", warp.factor, if warp.factor >= RAILS_THRESHOLD { "ON RAILS" } else { "PHYSICS" });
     }
 
     // ',' -> slow down time
-    if input.is_key_pressed(KeyCode::Comma) {
+    if input.is_key_just_pressed(KeyCode::Comma) {
         warp.factor = (warp.factor / 1.5).max(1.0);
         println!("Time Warp: {:.1}x ({})", warp.factor, if warp.factor >= RAILS_THRESHOLD { "ON RAILS" } else { "PHYSICS" });
     }
 
     // '/' -> 1x speed
-    if input.is_key_pressed(KeyCode::Slash) {
+    if input.is_key_just_pressed(KeyCode::Slash) {
         warp.factor = 1.0;
         println!("Time Warp: 1.0x (PHYSICS)");
     }

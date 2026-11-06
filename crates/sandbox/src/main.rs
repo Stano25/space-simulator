@@ -6,8 +6,8 @@ use engine::render::camera::{GpuCamera, CameraUniform, Projection, SAFE_FRAC_PI_
 use engine::input::input::InputState;
 use engine::time::time::Time;
 
-use sandbox::physics::{ input::time_warp_input_system,
-                        orbit::{TimeWarp, orbit_system}};
+use sandbox::physics::{components::TimeWarp, input::time_warp_input_system,
+                       systems::propagation_system};
 use sandbox::render::systems::sandbox_render_system;
 use sandbox::render::skybox::{setup_skybox_system, update_skybox_system};
 use sandbox::test_system::test_system;
@@ -33,8 +33,8 @@ fn main() {
         .add_startup_system((test_system, setup_skybox_system))
 
         // UPDATE (runs every tick in about_to_wait)
-        .add_system((camera_system, update_skybox_system, orbit_system))
-        .add_system(time_warp_input_system.before(orbit_system))
+        .add_system((camera_system, update_skybox_system, propagation_system))
+        .add_system(time_warp_input_system.before(propagation_system))
 
         // RENDER (runs on WindowEvent::RedrawRequested)
         .set_render_system(sandbox_render_system)

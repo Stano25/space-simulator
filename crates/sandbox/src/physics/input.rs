@@ -1,6 +1,6 @@
 use engine::input::input::InputState;
 
-use crate::physics::orbit::{TimeWarp, RAILS_THRESHOLD};
+use crate::physics::components::{TimeWarp, RAILS_THRESHOLD};
 
 use bevy_ecs::prelude::*;
 use winit::keyboard::KeyCode;

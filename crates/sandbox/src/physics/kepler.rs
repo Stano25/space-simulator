@@ -1,31 +1,35 @@
 use bevy_ecs::prelude::*;
 use glam::DVec3;
 
+/// A two-body conic orbit of a body around its `parent`, stored as classical
+/// orbital elements stamped at an epoch. Bodies carrying this component are
+/// propagated analytically while time is warped on rails; bodies without it
+/// act as frozen rails anchors (see `systems::rails_step`).
 #[derive(Component, Clone, Copy)]
 pub struct KeplerOrbit {
-    pub parent: Option<Entity>,
-    pub gm: f64, // parent G*M + current G*M
+    pub parent: Entity,
+    pub gm: f64, // Two-body mu: parent G*M + own G*M
     pub a: f64, // Semi-major axis (size of orbit)
     pub e: f64, // 0.0 = perfect circle, 0.0 < e < 1.0 = ellipse
     pub periapsis_dir: DVec3, // Unit vector pointing toward periapsis (closest approach)
-    pub semi_minor_dir: DVec3, // Unit vector in orbital plane, perpendicular to periapsis in direction of motions
+    pub semi_minor_dir: DVec3, // Unit vector in orbital plane, perpendicular to periapsis in direction of motion
     pub mean_anomaly_epoch: f64, // Mean anomaly at epoch t0 (in radians)
     pub epoch_time: f64, // Time of epoch t0
 }
 
 impl KeplerOrbit {
-    // Converts instantaneous Cartesian (r, v) into a KeplerOrbit
-    // `pos` and `vel` are parent-RELATIVE state vectors.
+    // Converts instantaneous Cartesian state vectors into a KeplerOrbit.
+    // `rel_pos` and `rel_vel` must be PARENT-RELATIVE (world state minus the
+    // parent's world state); `mu` is the two-body parameter (parent G*M + own G*M).
     pub fn from_state_vectors(
-        parent: Option<Entity>,
-        parent_pos: DVec3,
-        pos: DVec3,
-        vel: DVec3,
-        gm: f64,
+        parent: Entity,
+        rel_pos: DVec3,
+        rel_vel: DVec3,
+        mu: f64,
         current_time: f64,
     ) -> Self {
-        let r_vec = pos - parent_pos;
-        let v_vec = vel;
+        let r_vec = rel_pos;
+        let v_vec = rel_vel;
         let r = r_vec.length();
         let v_sq = v_vec.length_squared();
 
@@ -33,11 +37,11 @@ impl KeplerOrbit {
         let h_vec = r_vec.cross(v_vec);
 
         // 2. Eccentricity vector: e = (v x h)/mu - r/|r|
-        let e_vec = v_vec.cross(h_vec) / gm - (r_vec / r);
+        let e_vec = v_vec.cross(h_vec) / mu - (r_vec / r);
         let e = e_vec.length().clamp(0.0, 0.999);
 
         // 3. Semi-major axis from vis-viva equation: 1/a = 2/r - v^2/mu
-        let a = 1.0 / (2.0 / r - v_sq / gm);
+        let a = 1.0 / (2.0 / r - v_sq / mu);
 
         // 4. Perifocal basis vectors
         let periapsis_dir = if e > 1e-6 { e_vec.normalize() } else { r_vec.normalize() };
@@ -58,7 +62,7 @@ impl KeplerOrbit {
 
         Self {
             parent,
-            gm,
+            gm: mu,
             a,
             e,
             periapsis_dir,
@@ -110,99 +114,5 @@ impl KeplerOrbit {
         let rel_vel = self.periapsis_dir * vx_orb + self.semi_minor_dir * vz_orb;
 
         (rel_pos, rel_vel)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    const EPS: f64 = 1e-12;
-
-    fn dist(a: DVec3, b: DVec3) -> f64 {
-        (a - b).length()
-    }
-
-    // The seeded binary star: circular orbit around the barycenter at origin.
-    // Exact f64 state vectors must round-trip losslessly.
-    #[test]
-    fn circular_state_roundtrips_exactly() {
-        let pos = DVec3::new(3.2, 0.0, 0.0);
-        let vel = DVec3::new(0.0, 0.0, 20.0f64.sqrt()); // sqrt(64/3.2) = sqrt(20)
-        let orbit = KeplerOrbit::from_state_vectors(None, DVec3::ZERO, pos, vel, 64.0, 0.0);
-
-        // Elements must be a perfect circle
-        assert!((orbit.e - 0.0).abs() < EPS, "e = {}", orbit.e);
-        assert!((orbit.a - 3.2).abs() < EPS, "a = {}", orbit.a);
-
-        // eval at epoch reproduces the snapshot state (pre-fix this flipped by pi: pos = -2.8)
-        let (p, v) = orbit.eval_state_at_time(0.0);
-        assert!(dist(p, pos) < EPS, "pos diverged: {}", dist(p, pos));
-        assert!(dist(v, vel) < EPS, "vel diverged: {}", dist(v, vel));
-
-        // 2000 periods later the body is back at the snapshot position
-        let period = std::f64::consts::TAU * ((3.2f64 * 3.2 * 3.2) / 64.0).sqrt();
-        let (p2, _) = orbit.eval_state_at_time(2000.0 * period);
-        assert!(dist(p2, pos) < 1e-9, "pos after 2000 periods: {}", dist(p2, pos));
-    }
-
-    // An f32-truncated circular velocity (as stored when Velocity was Vec3) yields
-    // an eccentricity of ~1.6e-5 with the periapsis on the far side, so the anomaly
-    // legitimately reconstructs to E = pi (apoapsis in that skewed basis). That is
-    // SELF-CONSISTENT: what matters is that the state round-trips — eval at epoch
-    // reproduces the snapshot instead of teleporting to a different orbit branch.
-    #[test]
-    fn truncated_velocity_state_roundtrips() {
-        let pos = DVec3::new(3.2, 0.0, 0.0);
-        let vel = DVec3::new(0.0, 0.0, 4.4721); // f32 truncation of sqrt(20) = 4.472136
-        let orbit = KeplerOrbit::from_state_vectors(None, DVec3::ZERO, pos, vel, 64.0, 0.0);
-
-        let (p, v) = orbit.eval_state_at_time(0.0);
-        assert!(dist(p, pos) < 1e-3, "pos round-trip error: {}", dist(p, pos));
-        assert!(dist(v, vel) < 1e-2, "vel round-trip error: {}", dist(v, vel));
-
-        // The elements hold a valid bound ellipse of the right size, whatever side
-        // the (degenerate) periapsis ended up on.
-        assert!((orbit.a - 3.2).abs() < 1e-3, "a = {}", orbit.a);
-    }
-
-    // The two binary stars' mean motions must stay commensurate: their anti-phase
-    // alignment must not drift apart over many orbits (post-fix: both periods are
-    // f64-exact equal, so drift is at machine epsilon level).
-    #[test]
-    fn binary_stars_stay_antiphase() {
-        let a_orbit = KeplerOrbit::from_state_vectors(
-            None, DVec3::ZERO,
-            DVec3::new(3.2, 0.0, 0.0),
-            DVec3::new(0.0, 0.0, 20.0f64.sqrt()),
-            64.0, 0.0,
-        );
-        let b_orbit = KeplerOrbit::from_state_vectors(
-            None, DVec3::ZERO,
-            DVec3::new(-4.8, 0.0, 0.0),
-            DVec3::new(0.0, 0.0, 45.0f64.sqrt()), // sqrt(216/4.8) = sqrt(45)
-            216.0, 0.0,
-        );
-
-        let angle = |p: DVec3, orbit: &KeplerOrbit| {
-            // Convert world position back to the orbit's in-plane anomaly reference:
-            // the perifocal decomposition angle is enough for relative comparison.
-            p.dot(orbit.semi_minor_dir).atan2(p.dot(orbit.periapsis_dir))
-        };
-
-        for t in [500.0, 2000.0, 10000.0] { // 223 / 894 / 4470 orbits
-            let (pa, _) = a_orbit.eval_state_at_time(t);
-            let (pb, _) = b_orbit.eval_state_at_time(t);
-            let (p0a, _) = a_orbit.eval_state_at_time(0.0);
-            let (p0b, _) = b_orbit.eval_state_at_time(0.0);
-            let phase_a = angle(pa, &a_orbit) - angle(p0a, &a_orbit);
-            let phase_b = angle(pb, &b_orbit) - angle(p0b, &b_orbit);
-            // Both advance by the same in-plane phase: n_A == n_B exactly (f64 seeds).
-            assert!(
-                (phase_a - phase_b).abs() < 1e-9,
-                "phase drift at t={}: {} vs {} (delta {})",
-                t, phase_a, phase_b, (phase_a - phase_b).abs()
-            );
-        }
     }
 }

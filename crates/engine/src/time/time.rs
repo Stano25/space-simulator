@@ -30,15 +30,6 @@ impl Time {
         self.delta_time
     }
 
-    /// Test helper: sets the current frame delta without measuring wall clock time.
-    /// Keeps the wall clock monotonic so a later real `update()` measures from now.
-    #[doc(hidden)]
-    pub fn set_delta_time(&mut self, delta: f32) {
-        self.delta_time = delta;
-        self.elapsed_time += delta;
-        self.last_frame_time = Instant::now();
-    }
-
     pub fn elapsed_time(&self) -> f32 {
         self.elapsed_time
     }

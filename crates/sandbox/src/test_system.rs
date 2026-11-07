@@ -27,6 +27,17 @@ const TH_INDICES: &[u16] = &[
     1, 3, 2, // Bottom
 ];
 
+// ===========================================================================
+// Example solar system: one star at the origin with two planets in circular
+// orbits around it. The star carries NO KeplerOrbit: it is the frozen rails
+// anchor, and both planets orbit it parent-relative (see rails_step).
+// ===========================================================================
+
+const STAR_GM: f64 = 1000.0;
+const NEAR_GM: f64 = 0.5;
+const FAR_GM: f64 = 1.0;
+const NEAR_R: f64 = 10.0; // Planet 1 orbit radius | Period ~6.28 s
+const FAR_R: f64 = 28.0;  // Planet 2 orbit radius | Period ~29.4 s
 
 pub fn test_system(mut commands: Commands, render_context: Res<RenderContext>, gpu_layout: Res<LayoutRegistry>) {
     commands.spawn( Camera::from_direction(
@@ -40,96 +51,73 @@ pub fn test_system(mut commands: Commands, render_context: Res<RenderContext>, g
     let texture = Texture::from_bytes(&render_context.device, &render_context.queue, include_bytes!("../../../assets/textures/roman.png"), "roman.png").unwrap();
     let material = Material::new(&render_context.device, &gpu_layout.get(EngineLayout::Material), Arc::new(texture));
 
-    // ===========================================================================
-    // STAR A
-    // Mass: 600.0 | Distance to Barycenter: 3.2 | Period: ~4.5s
-    // ===========================================================================
-    let star_a_pos = DVec3::new(3.2, 0.0, 0.0);
-    let star_a_vel = DVec3::new(0.0, 0.0, 20.0f64.sqrt()); // Circular: sqrt(mu_bar/a) = sqrt(64/3.2)
-    let star_a_acc = DVec3::new(-6.25, 0.0, 0.0);  // Initial gravity from Star B (-X)
-
-    let star_a_orbit = KeplerOrbit {
-        parent: None,
-        gm: 64.0, // Effective mu for Star A around barycenter: M_B^3 / (M_A + M_B)^2
-        a: 3.2,
-        e: 0.0,
-        periapsis_dir: DVec3::X,
-        semi_minor_dir: DVec3::Z,
-        mean_anomaly_epoch: 0.0,
-        epoch_time: 0.0,
-    };
-
-    // ===========================================================================
-    // STAR B
-    // Mass: 400.0 | Distance to Barycenter: 4.8 | Period: ~4.5s (180° opposite)
-    // ===========================================================================
-    let star_b_pos = DVec3::new(-4.8, 0.0, 0.0);
-    let star_b_vel = DVec3::new(0.0, 0.0, -(45.0f64.sqrt())); // Circular: sqrt(216/4.8) = sqrt(45)
-    let star_b_acc = DVec3::new(9.375, 0.0, 0.0);   // Initial gravity from Star A (+X)
-
-    let star_b_orbit = KeplerOrbit {
-        parent: None,
-        gm: 216.0, // Effective mu for Star B around barycenter: M_A^3 / (M_A + M_B)^2
-        a: 4.8,
-        e: 0.0,
-        periapsis_dir: -DVec3::X, // 180 degrees opposite Star A!
-        semi_minor_dir: -DVec3::Z,
-        mean_anomaly_epoch: 0.0,
-        epoch_time: 0.0,
-    };
-
-    // ===========================================================================
-    // 3. CIRCUMBINARY PLANET
-    // Orbits the common barycenter outside both stars | Distance: 24.0 | Period: ~23.3s
-    // ===========================================================================
-    let planet_pos = DVec3::new(0.0, 0.0, -24.0);
-    let planet_vel = DVec3::new((1000.5f64 / 24.0f64).sqrt(), 0.0, 0.0); // Circular: sqrt(1000.5/24)
-    let planet_acc = DVec3::new(0.0044, 0.0, 1.6693); // Combined pull from both stars (+Z)
-
-    let planet_orbit = KeplerOrbit {
-        parent: None,
-        gm: 1000.5, // Sees combined mass of both stars + planet (600 + 400 + 0.5)
-        a: 24.0,
-        e: 0.0,
-        periapsis_dir: -DVec3::Z,
-        semi_minor_dir: DVec3::X,
-        mean_anomaly_epoch: 0.0,
-        epoch_time: 0.0,
-    };
+    // Initial accelerations: exact pairwise pulls at t = 0 so physics mode
+    // starts clean. The planets sit on opposite sides of the star, separated
+    // by NEAR_R + FAR_R along X.
+    let separation = NEAR_R + FAR_R;
+    let star_acc = DVec3::new(
+        NEAR_GM / (NEAR_R * NEAR_R) - FAR_GM / (FAR_R * FAR_R),
+        0.0, 0.0,
+    );
+    let near_acc = DVec3::new(
+        -(STAR_GM / (NEAR_R * NEAR_R) + FAR_GM / (separation * separation)),
+        0.0, 0.0,
+    );
+    let far_acc = DVec3::new(
+        STAR_GM / (FAR_R * FAR_R) + NEAR_GM / (separation * separation),
+        0.0, 0.0,
+    );
 
     // ===========================================================================
     // Entity spawning
     // ===========================================================================
 
-    // STAR A
+    // STAR — no KeplerOrbit: it is the anchor everything orbits on rails
+    let star = commands.spawn((
+        Transform { position: DVec3::ZERO, rotation: Quat::IDENTITY, scale: Vec3::splat(2.0) },
+        Velocity(DVec3::ZERO),
+        Acceleration(star_acc),
+        CelestialBody { gm: STAR_GM, softening_sq: 1e-6 },
+        th_mesh.clone(),
+        material.clone()
+    )).id();
+
+    // NEAR PLANET — circular orbit: v = sqrt(mu / r) with the two-body mu
     commands.spawn((
-        Transform { position: star_a_pos, rotation: Quat::IDENTITY, scale: Vec3::splat(1.8) },
-        Velocity(star_a_vel),
-        Acceleration(star_a_acc),
-        CelestialBody { gm: 600.0, softening_sq: 1e-6 },
-        star_a_orbit,
+        Transform { position: DVec3::new(NEAR_R, 0.0, 0.0), rotation: Quat::IDENTITY, scale: Vec3::splat(0.6) },
+        Velocity(DVec3::new(0.0, 0.0, ((STAR_GM + NEAR_GM) / NEAR_R).sqrt())),
+        Acceleration(near_acc),
+        CelestialBody { gm: NEAR_GM, softening_sq: 1e-6 },
+        KeplerOrbit {
+            parent: star,
+            gm: STAR_GM + NEAR_GM,
+            a: NEAR_R,
+            e: 0.0,
+            periapsis_dir: DVec3::X,
+            semi_minor_dir: DVec3::Z,
+            mean_anomaly_epoch: 0.0,
+            epoch_time: 0.0,
+        },
         th_mesh.clone(),
         material.clone()
     ));
 
-    // STAR B
+    // FAR PLANET — circular orbit on the opposite side, same orbital sense
     commands.spawn((
-        Transform { position: star_b_pos, rotation: Quat::IDENTITY, scale: Vec3::splat(1.2) },
-        Velocity(star_b_vel),
-        Acceleration(star_b_acc),
-        CelestialBody { gm: 400.0, softening_sq: 1e-6 },
-        star_b_orbit,
-        th_mesh.clone(),
-        material.clone()
-    ));
-
-    // CIRCUMBINARY PLANET
-    commands.spawn((
-        Transform { position: planet_pos, rotation: Quat::IDENTITY, scale: Vec3::splat(0.6) },
-        Velocity(planet_vel),
-        Acceleration(planet_acc),
-        CelestialBody { gm: 0.5, softening_sq: 1e-6 },
-        planet_orbit,
+        Transform { position: DVec3::new(-FAR_R, 0.0, 0.0), rotation: Quat::IDENTITY, scale: Vec3::splat(0.9) },
+        Velocity(DVec3::new(0.0, 0.0, -((STAR_GM + FAR_GM) / FAR_R).sqrt())),
+        Acceleration(far_acc),
+        CelestialBody { gm: FAR_GM, softening_sq: 1e-6 },
+        KeplerOrbit {
+            parent: star,
+            gm: STAR_GM + FAR_GM,
+            a: FAR_R,
+            e: 0.0,
+            periapsis_dir: -DVec3::X,
+            semi_minor_dir: -DVec3::Z,
+            mean_anomaly_epoch: 0.0,
+            epoch_time: 0.0,
+        },
         th_mesh.clone(),
         material.clone()
     ));
